@@ -1,0 +1,10 @@
+.env
+node_modules/
+data/
+*.log
+
+# Browser/session profiles can contain authenticated cookies.
+GNPMonitorProfile/
+profile/
+playwright-report/
+test-results/

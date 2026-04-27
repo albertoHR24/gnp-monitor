@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monitor GNP</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="top-bar">
+    <div class="top-left">
+      <div class="logo">
+        <svg class="logo-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+        <div class="logo-text">
+          <span class="logo-title">Monitor GNP</span>
+          <span class="logo-sub">Workflow GMM</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="top-center">
+      <div id="statusBadge" class="status-badge idle">
+        <span class="status-dot"></span>
+        <span id="statusLabel">Listo</span>
+      </div>
+      <div class="meta-info">
+        <span class="meta-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <span id="lastUpdateChip">-</span>
+        </span>
+        <span class="meta-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span id="sessionChip">Sin verificar</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="top-right">
+      <button id="togglePanelBtn" class="btn-icon" type="button" title="Bitacora">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/>
+        </svg>
+      </button>
+      <button id="manualBtn" class="btn secondary" type="button" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+        <span>Login manual</span>
+      </button>
+      <button id="cancelBtn" class="btn secondary" type="button" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <span>Cancelar</span>
+      </button>
+      <button id="restartBrowserBtn" class="btn secondary" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+        <span>Reiniciar navegador</span>
+      </button>
+      <button id="runBtn" class="btn primary" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        <span>Actualizar</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- Banner de login manual -->
+    <section id="manualBanner" class="banner">
+      <div class="banner-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+      </div>
+      <div class="banner-content">
+        <h3>Login manual requerido</h3>
+        <p id="manualReason">El sistema no pudo pasar el acceso solo.</p>
+        <ul id="manualSteps"></ul>
+      </div>
+    </section>
+
+    <section id="tvAlerts" class="tv-alerts quiet">
+      <div class="tv-alert-item">Sin cambios de estatus ni casos prioritarios</div>
+    </section>
+
+    <section id="staleBanner" class="stale-banner hidden">
+      <strong>Datos sin actualizar</strong>
+      <span id="staleText">Revisa la conexion o ejecuta una consulta manual.</span>
+    </section>
+
+    <section class="tv-meta">
+      <div class="tv-meta-card">
+        <span>Hora</span>
+        <strong id="clockChip">--:--</strong>
+      </div>
+      <div class="tv-meta-card">
+        <span>Ultima consulta</span>
+        <strong id="lastRunChip">-</strong>
+      </div>
+      <div class="tv-meta-card">
+        <span>Proxima consulta</span>
+        <strong id="nextRunChip">Desactivada</strong>
+      </div>
+      <div class="tv-meta-card">
+        <span>Registros visibles</span>
+        <strong id="visibleRowsChip">0</strong>
+      </div>
+      <div class="tv-meta-card">
+        <span>Terminadas ocultas</span>
+        <strong id="hiddenTerminatedChip">0</strong>
+      </div>
+    </section>
+
+    <section class="tv-controls">
+      <button id="toggleTerminatedBtn" class="tv-toggle" type="button">
+        <span>Registros</span>
+        <strong>Todos</strong>
+      </button>
+      <button id="toggleAutoScrollBtn" class="tv-toggle" type="button">
+        <span>Scroll</span>
+        <strong>Manual</strong>
+      </button>
+      <button id="scrollTopBtn" class="tv-toggle compact" type="button">
+        <span>Tabla</span>
+        <strong>Arriba</strong>
+      </button>
+    </section>
+
+    <section id="changeTicker" class="change-ticker hidden">
+      <span>Cambios recientes</span>
+      <div id="changeTickerText"></div>
+    </section>
+
+    <!-- Stats compactos -->
+    <section class="stats-row">
+      <div class="stat-box total">
+        <div class="stat-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <span class="stat-number" id="sumTotal">0</span>
+          <span class="stat-label">Total</span>
+        </div>
+      </div>
+      <div class="stat-box new">
+        <div class="stat-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <span class="stat-number" id="sumNuevos">0</span>
+          <span class="stat-label">Nuevos</span>
+        </div>
+      </div>
+      <div class="stat-box changed">
+        <div class="stat-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <span class="stat-number" id="sumCambiados">0</span>
+          <span class="stat-label">Cambiados</span>
+        </div>
+      </div>
+      <div class="stat-box deleted">
+        <div class="stat-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <span class="stat-number" id="sumEliminados">0</span>
+          <span class="stat-label">Eliminados</span>
+        </div>
+      </div>
+      <div class="stat-box status">
+        <div class="stat-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <span class="stat-message" id="statusMessage">Sin actividad</span>
+          <span class="stat-label" id="statusSecondary">Esperando</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Contenedor principal: Tabla + Panel -->
+    <div class="content-wrapper">
+      <!-- TABLA PRINCIPAL -->
+      <section class="table-container">
+        <div class="table-toolbar">
+          <div class="toolbar-left">
+            <h2 class="table-title">Ordenes de Trabajo</h2>
+            <span class="record-count" id="tableCount">0 registros</span>
+          </div>
+          <div class="toolbar-right">
+            <div class="search-field">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input type="text" id="searchInput" placeholder="Buscar OT, poliza, contratante..." />
+            </div>
+            <select id="statusFilter" class="status-select">
+              <option value="">Todos</option>
+              <option value="activada">Activada</option>
+              <option value="cancelada">Cancelada</option>
+              <option value="en proceso">En Proceso</option>
+              <option value="en registro">En Registro</option>
+              <option value="rechazada">Rechazada</option>
+              <option value="reprocesada">Reprocesada</option>
+              <option value="terminada">Terminada</option>
+            </select>
+            <button id="refreshBtn" class="btn-icon small" type="button" title="Refrescar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Estado de carga -->
+        <div id="loadingState" class="loading-overlay hidden">
+          <div class="loading-content">
+            <div class="spinner-ring">
+              <div class="ring"></div>
+              <div class="ring"></div>
+              <div class="ring"></div>
+            </div>
+            <div class="loading-text">
+              <span class="loading-title" id="loadingTitle">Consultando GNP</span>
+              <span class="loading-desc" id="loadingDesc">Conectando con el portal...</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-bar" id="progressBar"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Estado vacio -->
+        <div id="emptyState" class="empty-state">
+          <div class="empty-icon">
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+          </div>
+          <h3>Sin registros cargados</h3>
+          <p>Haz clic en "Actualizar" para consultar las ordenes de trabajo</p>
+        </div>
+
+        <!-- Tabla con datos -->
+        <div id="tableWrap" class="table-scroll hidden">
+          <table>
+            <thead>
+              <tr>
+                <th class="col-ot">OT</th>
+                <th class="col-usuario">Usuario Creador</th>
+                <th class="col-estatus">Estatus</th>
+                <th class="col-fecha">F. Compromiso</th>
+                <th class="col-poliza">Poliza</th>
+                <th class="col-agente">Agente</th>
+                <th class="col-contratante">Contratante</th>
+                <th class="col-tipo">Tipo solicitud</th>
+                <th class="col-producto">Producto</th>
+                <th class="col-guia">Guia</th>
+                <th class="col-fecha">F. Registro</th>
+                <th class="col-fecha">Primer ingreso</th>
+                <th class="col-fecha">Ultimo ingreso</th>
+                <th class="col-medio">Medio</th>
+                <th class="col-rol">Rol</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+
+        <!-- Paginacion -->
+        <div id="pagination" class="pagination hidden">
+          <span class="pagination-info" id="paginationInfo">Mostrando 1-50 de 100</span>
+          <div class="pagination-nav">
+            <button id="prevPage" class="btn-page" disabled>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <span id="pageIndicator" class="page-num">1 / 1</span>
+            <button id="nextPage" class="btn-page">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Panel lateral -->
+      <aside id="sidePanel" class="side-panel">
+        <div class="panel-header">
+          <h3>Actividad</h3>
+          <button id="closePanelBtn" class="btn-icon small" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="panel-body">
+          <div class="panel-section">
+            <h4>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+              Bitacora
+            </h4>
+            <ul id="logList" class="log-list"></ul>
+          </div>
+          <div class="panel-section">
+            <h4>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Cambios
+            </h4>
+            <div id="changesBox" class="changes-box">Sin cambios</div>
+          </div>
+        </div>
+        <div class="panel-footer">
+          <span class="footer-label">URL:</span>
+          <span id="urlChip" class="footer-url">-</span>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
