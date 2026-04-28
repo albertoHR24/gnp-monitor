@@ -1,8 +1,8 @@
 {
-  "name": "nueva-carpeta-(5)",
+  "name": "gnp-monitor",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Monitor local de ordenes de trabajo GNP.",
+  "main": "gnp-monitor.js",
   "scripts": {
     "start": "node gnp-monitor.js",
     "test": "node --check gnp-monitor.js && node --check public/app.js && node tests/pure.test.js"

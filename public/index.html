@@ -18,6 +18,10 @@
           <span class="logo-sub">Workflow GMM</span>
         </div>
       </div>
+      <div class="mode-switch" role="group" aria-label="Modo de vista">
+        <button id="operatorModeBtn" class="mode-btn active" type="button">Operador</button>
+        <button id="tvModeBtn" class="mode-btn" type="button">TV</button>
+      </div>
     </div>
 
     <div class="top-center">
@@ -110,17 +114,56 @@
     </section>
 
     <section class="tv-controls">
-      <button id="toggleTerminatedBtn" class="tv-toggle" type="button">
-        <span>Registros</span>
-        <strong>Todos</strong>
+      <div id="tvControlsMenu" class="tv-controls-menu">
+        <button id="tvControlsMenuBtn" class="tv-menu-btn" type="button" aria-expanded="false" aria-controls="tvControlsDropdown" title="Opciones de TV">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="4" y1="7" x2="20" y2="7"/>
+            <line x1="4" y1="12" x2="20" y2="12"/>
+            <line x1="4" y1="17" x2="20" y2="17"/>
+          </svg>
+          <span>Opciones TV</span>
+        </button>
+        <div id="tvControlsDropdown" class="tv-controls-dropdown hidden">
+          <button id="toggleTerminatedBtn" class="tv-toggle" type="button">
+            <span>Registros</span>
+            <strong>Todos</strong>
+          </button>
+          <button id="toggleAutoScrollBtn" class="tv-toggle" type="button">
+            <span>Scroll</span>
+            <strong>Manual</strong>
+          </button>
+          <button id="scrollTopBtn" class="tv-toggle compact" type="button">
+            <span>Tabla</span>
+            <strong>Arriba</strong>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="quick-filters" aria-label="Filtros rapidos">
+      <button class="quick-filter active" type="button" data-filter="all">
+        <span>Todos</span>
+        <strong id="quickAllCount">0</strong>
       </button>
-      <button id="toggleAutoScrollBtn" class="tv-toggle" type="button">
-        <span>Scroll</span>
-        <strong>Manual</strong>
+      <button class="quick-filter" type="button" data-filter="due">
+        <span>Vencidas</span>
+        <strong id="quickDueCount">0</strong>
       </button>
-      <button id="scrollTopBtn" class="tv-toggle compact" type="button">
-        <span>Tabla</span>
-        <strong>Arriba</strong>
+      <button class="quick-filter" type="button" data-filter="today">
+        <span>Vencen hoy</span>
+        <strong id="quickTodayCount">0</strong>
+      </button>
+      <button class="quick-filter" type="button" data-filter="open">
+        <span>Abiertas</span>
+        <strong id="quickOpenCount">0</strong>
+      </button>
+      <button class="quick-filter" type="button" data-filter="changed">
+        <span>Cambiadas</span>
+        <strong id="quickChangedCount">0</strong>
+      </button>
+      <button class="quick-filter" type="button" data-filter="new">
+        <span>Nuevas</span>
+        <strong id="quickNewCount">0</strong>
       </button>
     </section>
 
@@ -162,6 +205,28 @@
         <div class="stat-content">
           <span class="stat-number" id="sumCambiados">0</span>
           <span class="stat-label">Cambiados</span>
+        </div>
+      </div>
+      <div class="stat-box due">
+        <div class="stat-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <span class="stat-number" id="sumVencidas">0</span>
+          <span class="stat-label">Vencidas</span>
+        </div>
+      </div>
+      <div class="stat-box today">
+        <div class="stat-icon-wrap">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <span class="stat-number" id="sumHoy">0</span>
+          <span class="stat-label">Vencen hoy</span>
         </div>
       </div>
       <div class="stat-box deleted">
@@ -259,6 +324,7 @@
                 <th class="col-ot">OT</th>
                 <th class="col-usuario">Usuario Creador</th>
                 <th class="col-estatus">Estatus</th>
+                <th class="col-prioridad">Prioridad</th>
                 <th class="col-fecha">F. Compromiso</th>
                 <th class="col-poliza">Poliza</th>
                 <th class="col-agente">Agente</th>
@@ -320,6 +386,16 @@
           <span class="footer-label">URL:</span>
           <span id="urlChip" class="footer-url">-</span>
         </div>
+      </aside>
+
+      <aside id="detailPanel" class="detail-panel hidden">
+        <div class="panel-header">
+          <h3 id="detailTitle">Detalle OT</h3>
+          <button id="closeDetailBtn" class="btn-icon small" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div id="detailBody" class="detail-body"></div>
       </aside>
     </div>
   </main>

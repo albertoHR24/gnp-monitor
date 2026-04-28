@@ -19,6 +19,7 @@ function parseBooleanEnv(value, fallback = false) {
 const CONFIG = {
   port: Number(process.env.PORT || 3000),
   host: process.env.HOST || "127.0.0.1",
+  monitorToken: process.env.MONITOR_TOKEN || "",
   loginUrl: process.env.LOGIN_URL || "https://portalintermediarios.gnp.com.mx/sesion",
   dashboardUrl:
     process.env.DASHBOARD_URL ||
@@ -284,12 +285,6 @@ function getDefaultDateRange() {
     displayStart: formatDisplayDate(configuredStart),
     displayEnd: formatDisplayDate(configuredEnd),
   };
-
-  console.log("📅 Rango de fechas configurado:", {
-    queryDateFrom: CONFIG.queryDateFrom,
-    displayStart: range.displayStart,
-    displayEnd: range.displayEnd,
-  });
 
   return range;
 }
@@ -767,6 +762,35 @@ function publicSchedulerInfo(scheduler) {
   };
 }
 
+function isLocalHost(host) {
+  const value = String(host || "").trim().toLowerCase();
+  return ["127.0.0.1", "localhost", "::1"].includes(value);
+}
+
+function hasValidMonitorToken(req) {
+  if (!CONFIG.monitorToken) {
+    return true;
+  }
+
+  const headerToken = req.get("x-monitor-token") || "";
+  const bodyToken = req.body && typeof req.body.monitorToken === "string" ? req.body.monitorToken : "";
+  const queryToken = typeof req.query.monitorToken === "string" ? req.query.monitorToken : "";
+  return [headerToken, bodyToken, queryToken].some((token) => token === CONFIG.monitorToken);
+}
+
+function requireMonitorToken(req, res, next) {
+  if (hasValidMonitorToken(req)) {
+    next();
+    return;
+  }
+
+  res.status(401).json({
+    ok: false,
+    authRequired: true,
+    message: "Token local requerido. Configura MONITOR_TOKEN o envia X-Monitor-Token.",
+  });
+}
+
 function validateConfig() {
   const warnings = [];
 
@@ -784,6 +808,9 @@ function validateConfig() {
   }
   if (!CONFIG.profileDir) {
     warnings.push("PROFILE_DIR no esta configurado.");
+  }
+  if (!CONFIG.monitorToken && !isLocalHost(CONFIG.host)) {
+    warnings.push("MONITOR_TOKEN no esta configurado y HOST permite acceso fuera de localhost.");
   }
 
   runtime.validationWarnings = warnings;
@@ -3788,6 +3815,9 @@ function buildStatusPayload(includeData) {
     manualLogin: runtime.manualLogin,
     activeRun: runtime.activeRun,
     scheduler: publicSchedulerInfo(runtime.scheduler),
+    auth: {
+      postTokenRequired: Boolean(CONFIG.monitorToken),
+    },
     query: {
       dateFrom: dateRange.displayStart,
       dateTo: dateRange.displayEnd,
@@ -3833,6 +3863,9 @@ function buildHealthPayload() {
       currentUrl: pageOpen ? sanitizeUrlForClient(page.url()) : null,
     },
     scheduler: publicSchedulerInfo(runtime.scheduler),
+    auth: {
+      postTokenRequired: Boolean(CONFIG.monitorToken),
+    },
     warnings: runtime.validationWarnings,
   };
 }
@@ -3848,7 +3881,7 @@ app.get("/api/health", (_req, res) => {
   res.status(payload.ok ? 200 : 503).json(payload);
 });
 
-app.post("/api/run", (_req, res) => {
+app.post("/api/run", requireMonitorToken, (_req, res) => {
   if (runtime.busy) {
     res.json({ ok: false, busy: true, error: "Ya hay una ejecucion en curso." });
     return;
@@ -3858,7 +3891,7 @@ app.post("/api/run", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/api/continue-manual-login", async (_req, res) => {
+app.post("/api/continue-manual-login", requireMonitorToken, async (_req, res) => {
   const result = await continueAfterManualLogin().catch((error) => ({
     ok: false,
     message: serializeError(error),
@@ -3866,7 +3899,7 @@ app.post("/api/continue-manual-login", async (_req, res) => {
   res.json(result);
 });
 
-app.post("/api/cancel", async (_req, res) => {
+app.post("/api/cancel", requireMonitorToken, async (_req, res) => {
   const result = await cancelRun().catch((error) => ({
     ok: false,
     message: serializeError(error),
@@ -3874,7 +3907,7 @@ app.post("/api/cancel", async (_req, res) => {
   res.json(result);
 });
 
-app.post("/api/restart-browser", async (_req, res) => {
+app.post("/api/restart-browser", requireMonitorToken, async (_req, res) => {
   if (runtime.busy) {
     res.status(409).json({
       ok: false,
@@ -3942,10 +3975,12 @@ module.exports = {
   createEmptyDiff,
   extractItems,
   getCurrentMonthDateRange,
+  isLocalHost,
   mapItem,
   mergeCurrentMonthWithOpenOlderRows,
   parseDateForSort,
   publicSessionInfo,
+  requireMonitorToken,
   sanitizeUrlForClient,
   sortRows,
   startServer,

@@ -430,6 +430,20 @@ function startCarousel() {
   startAutoScroll();
 }
 
+function resetTableScroll(tableWrap) {
+  if (!tableWrap) return;
+
+  const reset = () => {
+    tableWrap.scrollTop = 0;
+    tableWrap.scrollLeft = 0;
+  };
+
+  reset();
+  requestAnimationFrame(reset);
+  setTimeout(reset, 60);
+  setTimeout(reset, 180);
+}
+
 function startAutoScroll() {
   if (autoScrollTimer) {
     clearInterval(autoScrollTimer);
@@ -447,8 +461,8 @@ function startAutoScroll() {
     const maxScroll = tableWrap.scrollHeight - tableWrap.clientHeight;
     if (maxScroll <= 2) return;
 
-    if (tableWrap.scrollTop >= maxScroll - 2) {
-      tableWrap.scrollTo({ top: 0, behavior: "smooth" });
+    if (tableWrap.scrollTop >= maxScroll - 8) {
+      resetTableScroll(tableWrap);
       return;
     }
 
@@ -891,13 +905,7 @@ document.getElementById("scrollTopBtn").addEventListener("click", () => {
   const tableWrap = document.getElementById("tableWrap");
   if (!tableWrap) return;
 
-  tableWrap.scrollTop = 0;
-  tableWrap.scrollTo({ top: 0, left: 0, behavior: "auto" });
-  const firstRow = tableWrap.querySelector("tbody tr:first-child");
-  if (firstRow) {
-    firstRow.scrollIntoView({ block: "start", inline: "nearest" });
-    tableWrap.scrollTop = 0;
-  }
+  resetTableScroll(tableWrap);
 
   if (tvConfig.autoScroll) {
     startAutoScroll();

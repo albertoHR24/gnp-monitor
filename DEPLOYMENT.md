@@ -37,7 +37,10 @@ Before using it, edit `.env` on the target PC and set at least:
 GNP_EMAIL=
 GNP_PASSWORD=
 PROFILE_DIR=C:\GNPMonitorProfile
+MONITOR_TOKEN=
 ```
+
+`MONITOR_TOKEN` is optional while the monitor only listens on `127.0.0.1`. Set it when exposing the monitor on a LAN or shared PC; POST actions such as run, cancel, continue login, and browser restart will require that token.
 
 The target PC needs Node.js LTS and Microsoft Edge installed.
 

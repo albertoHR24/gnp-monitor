@@ -7,6 +7,7 @@ const {
   buildGetPendientesUrl,
   compareRows,
   extractItems,
+  isLocalHost,
   mergeCurrentMonthWithOpenOlderRows,
   parseDateForSort,
   publicSessionInfo,
@@ -93,6 +94,9 @@ const url = buildGetPendientesUrl({
   usuario: "user@example.test",
 });
 assert.strictEqual(new URL(url).searchParams.get("num_pag"), "2");
+
+assert.strictEqual(isLocalHost("127.0.0.1"), true, "isLocalHost should accept loopback IPv4");
+assert.strictEqual(isLocalHost("0.0.0.0"), false, "isLocalHost should reject public bind hosts");
 
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gnp-monitor-test-"));
 const file = path.join(tempDir, "state.json");

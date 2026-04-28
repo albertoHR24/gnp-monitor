@@ -35,10 +35,14 @@ let panelVisible = true;
 let statusVersion = null;
 let hiddenTerminatedCount = 0;
 let lastStatusData = null;
+let activeUiMode = localStorage.getItem("gnpUiMode") || "operator";
+let quickFilter = localStorage.getItem("gnpQuickFilter") || "all";
+let selectedOt = null;
 let carouselTimer = null;
 let statusPollTimer = null;
 let autoScrollTimer = null;
 let lastAlertSignature = "";
+let postTokenRequired = false;
 let tvConfig = {
   rowsPerPage: 18,
   pageSeconds: 25,
@@ -66,6 +70,8 @@ function saveTvOverrides() {
 
 function applyTvConfig(nextConfig = {}) {
   const previousStatusPollSeconds = tvConfig.statusPollSeconds;
+  const previousRowsPerPage = tvConfig.rowsPerPage;
+  const previousPageSeconds = tvConfig.pageSeconds;
   const previousAutoScroll = tvConfig.autoScroll;
   const previousScrollPixels = tvConfig.scrollPixels;
   const previousScrollIntervalMs = tvConfig.scrollIntervalMs;
@@ -75,6 +81,10 @@ function applyTvConfig(nextConfig = {}) {
     ...tvOverrides,
   };
   rowsPerPage = Number(tvConfig.rowsPerPage) || rowsPerPage;
+  if (previousRowsPerPage !== tvConfig.rowsPerPage || previousPageSeconds !== tvConfig.pageSeconds) {
+    currentPage = Math.min(currentPage, getTotalPages());
+    startCarousel();
+  }
   if (!statusPollTimer || previousStatusPollSeconds !== tvConfig.statusPollSeconds) {
     startStatusPolling();
   }
@@ -97,9 +107,63 @@ function isTerminada(row) {
   return normalizeStatus(row.estatus) === "terminada";
 }
 
+function isOpenRow(row) {
+  return !isTerminada(row);
+}
+
 function shouldShowRow(row) {
   if (!tvConfig.hideTerminadas) return true;
   return !isTerminada(row) || isStatusChangedOt(row.ot);
+}
+
+function parseGnpDateOnly(value) {
+  const text = displayValue(value);
+  if (text === "-") return null;
+
+  const ddmmyyyy = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (ddmmyyyy) {
+    const [, day, month, year] = ddmmyyyy;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+
+  const yyyymmdd = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (yyyymmdd) {
+    const [, year, month, day] = yyyymmdd;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  }
+
+  return null;
+}
+
+function startOfToday() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function getDueInfo(row) {
+  const date = parseGnpDateOnly(row.fechaCompromiso);
+  if (!date || Number.isNaN(date.getTime())) {
+    return { key: "none", label: "Sin fecha", rank: 4, days: null };
+  }
+
+  if (isTerminada(row)) {
+    return { key: "closed", label: "Cerrada", rank: 5, days: null };
+  }
+
+  const diffDays = Math.round((date.getTime() - startOfToday().getTime()) / 86400000);
+  if (diffDays < 0) return { key: "due", label: `${Math.abs(diffDays)} d vencida`, rank: 0, days: diffDays };
+  if (diffDays === 0) return { key: "today", label: "Hoy", rank: 1, days: diffDays };
+  if (diffDays === 1) return { key: "tomorrow", label: "Manana", rank: 2, days: diffDays };
+  return { key: "future", label: `${diffDays} dias`, rank: 3, days: diffDays };
+}
+
+function matchesQuickFilter(row) {
+  if (quickFilter === "new") return isNewOt(row.ot);
+  if (quickFilter === "changed") return isChangedOt(row.ot);
+  if (quickFilter === "open") return isOpenRow(row);
+  if (quickFilter === "due") return getDueInfo(row).key === "due";
+  if (quickFilter === "today") return getDueInfo(row).key === "today";
+  return true;
 }
 
 function updateTvControls() {
@@ -121,6 +185,29 @@ function setTvOverride(key, value) {
   tvOverrides[key] = value;
   saveTvOverrides();
   applyTvConfig({});
+  applyFilters();
+}
+
+function setUiMode(mode) {
+  activeUiMode = mode === "tv" ? "tv" : "operator";
+  localStorage.setItem("gnpUiMode", activeUiMode);
+  document.body.classList.toggle("tv-mode", activeUiMode === "tv");
+  document.body.classList.toggle("operator-mode", activeUiMode !== "tv");
+  document.getElementById("operatorModeBtn").classList.toggle("active", activeUiMode !== "tv");
+  document.getElementById("tvModeBtn").classList.toggle("active", activeUiMode === "tv");
+  currentPage = 1;
+  renderTablePage();
+  updatePagination();
+  startCarousel();
+  resetTableScroll(document.getElementById("tableWrap"));
+}
+
+function setQuickFilter(filter) {
+  quickFilter = filter || "all";
+  localStorage.setItem("gnpQuickFilter", quickFilter);
+  document.querySelectorAll(".quick-filter").forEach((button) => {
+    button.classList.toggle("active", button.dataset.filter === quickFilter);
+  });
   applyFilters();
 }
 
@@ -146,6 +233,9 @@ function clearElement(element) {
 function appendCell(row, value, options = {}) {
   const cell = document.createElement("td");
   const text = displayValue(value);
+  if (options.className) {
+    cell.className = options.className;
+  }
 
   if (options.strong) {
     const strong = document.createElement("strong");
@@ -160,6 +250,16 @@ function appendCell(row, value, options = {}) {
     cell.textContent = text;
   }
 
+  row.appendChild(cell);
+}
+
+function appendPriorityCell(row, sourceRow) {
+  const due = getDueInfo(sourceRow);
+  const cell = document.createElement("td");
+  const badge = document.createElement("span");
+  badge.className = `priority-badge priority-${due.key}`;
+  badge.textContent = due.label;
+  cell.appendChild(badge);
   row.appendChild(cell);
 }
 
@@ -296,6 +396,9 @@ function sortForTv(rows) {
     const rightChanged = isStatusChangedOt(right.ot) ? 0 : 1;
     if (leftChanged !== rightChanged) return leftChanged - rightChanged;
 
+    const dueRank = getDueInfo(left).rank - getDueInfo(right).rank;
+    if (dueRank !== 0) return dueRank;
+
     const rank = statusRank(left.estatus) - statusRank(right.estatus);
     if (rank !== 0) return rank;
 
@@ -303,15 +406,51 @@ function sortForTv(rows) {
   });
 }
 
+function getOperationalSummary(rows) {
+  const openRows = rows.filter(isOpenRow);
+  const dueRows = openRows.filter((row) => getDueInfo(row).key === "due");
+  const todayRows = openRows.filter((row) => getDueInfo(row).key === "today");
+  const changedRows = rows.filter((row) => isChangedOt(row.ot));
+  const newRows = rows.filter((row) => isNewOt(row.ot));
+
+  return {
+    all: rows.length,
+    open: openRows.length,
+    due: dueRows.length,
+    today: todayRows.length,
+    changed: changedRows.length,
+    new: newRows.length,
+  };
+}
+
+function renderOperationalSummary() {
+  const summary = getOperationalSummary(allData);
+  const setText = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = String(value);
+  };
+
+  setText("quickAllCount", summary.all);
+  setText("quickDueCount", summary.due);
+  setText("quickTodayCount", summary.today);
+  setText("quickOpenCount", summary.open);
+  setText("quickChangedCount", summary.changed);
+  setText("quickNewCount", summary.new);
+  setText("sumVencidas", summary.due);
+  setText("sumHoy", summary.today);
+}
+
 function applyFilters() {
   const searchTerm = normalizeText(document.getElementById("searchInput").value).trim();
   const statusFilter = normalizeText(document.getElementById("statusFilter").value);
+  renderOperationalSummary();
   hiddenTerminatedCount = tvConfig.hideTerminadas
     ? allData.filter((row) => isTerminada(row) && !isStatusChangedOt(row.ot)).length
     : 0;
   
   filteredData = sortForTv(allData.filter(row => {
     if (!shouldShowRow(row)) return false;
+    if (!matchesQuickFilter(row)) return false;
 
     if (statusFilter) {
       const status = normalizeText(row.estatus);
@@ -340,6 +479,7 @@ function applyFilters() {
   if (tableWrap) tableWrap.scrollTop = 0;
   updatePagination();
   renderTvAlerts(diffData);
+  renderSelectedDetail();
 }
 
 function renderTablePage() {
@@ -364,15 +504,21 @@ function renderTablePage() {
   tableWrap.classList.remove("hidden");
   emptyState.style.display = "none";
   
-  const start = 0;
-  const end = filteredData.length;
-  const pageData = filteredData;
+  const isTvMode = activeUiMode === "tv";
+  currentPage = Math.min(Math.max(currentPage, 1), getTotalPages());
+  const start = (currentPage - 1) * rowsPerPage;
+  const end = Math.min(start + rowsPerPage, filteredData.length);
+  const pageData = isTvMode ? filteredData : filteredData.slice(start, end);
   
   document.getElementById("tableCount").textContent = `${filteredData.length} registros`;
   
   pageData.forEach((row) => {
     const tr = document.createElement("tr");
     const badgeClass = estatusBadgeClass(row.estatus);
+    const due = getDueInfo(row);
+    tr.dataset.ot = row.ot || "";
+    tr.classList.toggle("selected", selectedOt && row.ot === selectedOt);
+    tr.classList.add(`row-priority-${due.key}`);
     
     if (isNewOt(row.ot)) {
       tr.classList.add("row-new");
@@ -386,6 +532,7 @@ function renderTablePage() {
     appendCell(tr, row.ot, { strong: true });
     appendCell(tr, row.usuarioCreador);
     appendCell(tr, row.estatus, { badgeClass });
+    appendPriorityCell(tr, row);
     appendCell(tr, formatGnpDate(row.fechaCompromiso));
     appendCell(tr, row.poliza);
     appendCell(tr, row.agente);
@@ -398,12 +545,13 @@ function renderTablePage() {
     appendCell(tr, formatGnpDate(row.ultimoIngreso));
     appendCell(tr, row.medioApertura);
     appendCell(tr, formatRole(row.rol));
+    tr.addEventListener("click", () => selectRow(row.ot));
     tbody.appendChild(tr);
   });
 }
 
 function updatePagination() {
-  const totalPages = 1;
+  const totalPages = getTotalPages();
   const pagination = document.getElementById("pagination");
   const pageIndicator = document.getElementById("pageIndicator");
   const paginationInfo = document.getElementById("paginationInfo");
@@ -412,12 +560,17 @@ function updatePagination() {
   const visibleRowsChip = document.getElementById("visibleRowsChip");
   const hiddenChip = document.getElementById("hiddenTerminatedChip");
   
-  pagination.classList.add("hidden");
+  const isTvMode = activeUiMode === "tv";
+  pagination.classList.toggle("hidden", isTvMode || totalPages <= 1);
   
   const start = (currentPage - 1) * rowsPerPage + 1;
   const end = Math.min(currentPage * rowsPerPage, filteredData.length);
   
-  paginationInfo.textContent = `Mostrando ${filteredData.length} registros`;
+  paginationInfo.textContent = filteredData.length
+    ? isTvMode
+      ? `Mostrando ${filteredData.length} registros`
+      : `Mostrando ${start}-${end} de ${filteredData.length} registros`
+    : "Mostrando 0 registros";
   pageIndicator.textContent = `${currentPage} / ${totalPages}`;
   if (visibleRowsChip) visibleRowsChip.textContent = String(filteredData.length);
   if (hiddenChip) hiddenChip.textContent = String(hiddenTerminatedCount);
@@ -427,6 +580,29 @@ function updatePagination() {
 }
 
 function startCarousel() {
+  if (carouselTimer) {
+    clearInterval(carouselTimer);
+    carouselTimer = null;
+  }
+
+  if (activeUiMode === "tv") {
+    startAutoScroll();
+    return;
+  }
+
+  const seconds = Number(tvConfig.pageSeconds) || 0;
+  if (seconds >= 5) {
+    carouselTimer = setInterval(() => {
+      const totalPages = getTotalPages();
+      if (totalPages <= 1) return;
+
+      currentPage = currentPage >= totalPages ? 1 : currentPage + 1;
+      renderTablePage();
+      updatePagination();
+      resetTableScroll(document.getElementById("tableWrap"));
+    }, seconds * 1000);
+  }
+
   startAutoScroll();
 }
 
@@ -569,6 +745,103 @@ function renderChanges(diff) {
 
   clearElement(box);
   box.appendChild(list);
+}
+
+function appendDetailField(container, label, value) {
+  const item = document.createElement("div");
+  item.className = "detail-field";
+  const labelEl = document.createElement("span");
+  labelEl.textContent = label;
+  const valueEl = document.createElement("strong");
+  valueEl.textContent = displayValue(value);
+  item.append(labelEl, valueEl);
+  container.appendChild(item);
+}
+
+function renderSelectedDetail() {
+  const panel = document.getElementById("detailPanel");
+  const body = document.getElementById("detailBody");
+  const title = document.getElementById("detailTitle");
+  if (!panel || !body || !title) return;
+
+  const row = selectedOt ? allData.find((item) => item.ot === selectedOt) : null;
+  clearElement(body);
+
+  if (!row) {
+    panel.classList.add("hidden");
+    return;
+  }
+
+  const due = getDueInfo(row);
+  panel.classList.remove("hidden");
+  title.textContent = `OT ${displayValue(row.ot)}`;
+
+  const header = document.createElement("div");
+  header.className = "detail-summary";
+  const status = document.createElement("span");
+  status.className = `badge ${estatusBadgeClass(row.estatus)}`.trim();
+  status.textContent = displayValue(row.estatus);
+  const priority = document.createElement("span");
+  priority.className = `priority-badge priority-${due.key}`;
+  priority.textContent = due.label;
+  header.append(status, priority);
+  body.appendChild(header);
+
+  const grid = document.createElement("div");
+  grid.className = "detail-grid";
+  appendDetailField(grid, "Poliza", row.poliza);
+  appendDetailField(grid, "Contratante", row.contratante);
+  appendDetailField(grid, "Agente", row.agente);
+  appendDetailField(grid, "Producto", row.producto);
+  appendDetailField(grid, "Tipo solicitud", titleCase(row.tipoSolicitud));
+  appendDetailField(grid, "Fecha compromiso", formatGnpDate(row.fechaCompromiso));
+  appendDetailField(grid, "Fecha registro", formatGnpDate(row.fechaRegistro));
+  appendDetailField(grid, "Primer ingreso", formatGnpDate(row.primerIngreso));
+  appendDetailField(grid, "Ultimo ingreso", formatGnpDate(row.ultimoIngreso));
+  appendDetailField(grid, "Medio", row.medioApertura);
+  appendDetailField(grid, "Rol", formatRole(row.rol));
+  appendDetailField(grid, "Guia", row.guia);
+  body.appendChild(grid);
+
+  const change = getStatusChange(row.ot);
+  if (change) {
+    const section = document.createElement("div");
+    section.className = "detail-change";
+    const heading = document.createElement("span");
+    heading.textContent = "Cambio de estatus";
+    const detail = document.createElement("strong");
+    const statusChange = change.changes.find((entry) => entry.field === "estatus");
+    detail.textContent = `${displayValue(statusChange.before)} -> ${displayValue(statusChange.after)}`;
+    section.append(heading, detail);
+    body.appendChild(section);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "detail-actions";
+  const copyOt = document.createElement("button");
+  copyOt.className = "detail-action";
+  copyOt.type = "button";
+  copyOt.textContent = "Copiar OT";
+  copyOt.addEventListener("click", () => navigator.clipboard?.writeText(displayValue(row.ot)));
+  const copyPolicy = document.createElement("button");
+  copyPolicy.className = "detail-action";
+  copyPolicy.type = "button";
+  copyPolicy.textContent = "Copiar poliza";
+  copyPolicy.addEventListener("click", () => navigator.clipboard?.writeText(displayValue(row.poliza)));
+  actions.append(copyOt, copyPolicy);
+  body.appendChild(actions);
+}
+
+function selectRow(ot) {
+  selectedOt = ot;
+  renderTablePage();
+  renderSelectedDetail();
+}
+
+function closeDetail() {
+  selectedOt = null;
+  renderTablePage();
+  renderSelectedDetail();
 }
 
 function renderTvAlerts(diff) {
@@ -763,6 +1036,7 @@ function showLoading(show, mode) {
 
 function renderStatus(data) {
   lastStatusData = data;
+  postTokenRequired = Boolean(data.auth && data.auth.postTokenRequired);
   applyTvConfig(data.tv || {});
 
   const summary =
@@ -814,6 +1088,7 @@ function renderStatus(data) {
   renderChangeTicker(diffData);
   maybePlayAlertSound(diffData);
   renderTvMeta(data);
+  renderOperationalSummary();
   
   if (data.dataVersion) {
     statusVersion = data.dataVersion;
@@ -839,24 +1114,67 @@ async function fetchStatus() {
   }
 }
 
+function getMonitorToken() {
+  return localStorage.getItem("gnpMonitorToken") || "";
+}
+
+function promptForMonitorToken() {
+  const token = window.prompt("Token local del monitor");
+  if (token) {
+    localStorage.setItem("gnpMonitorToken", token);
+  }
+  return token || "";
+}
+
+async function apiPost(path) {
+  const headers = {};
+  const token = getMonitorToken();
+  if (token) {
+    headers["X-Monitor-Token"] = token;
+  }
+
+  let response = await fetch(path, { method: "POST", headers });
+  if (response.status === 401) {
+    const nextToken = promptForMonitorToken();
+    if (!nextToken) {
+      throw new Error("Token local requerido.");
+    }
+    response = await fetch(path, {
+      method: "POST",
+      headers: { "X-Monitor-Token": nextToken },
+    });
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok === false) {
+    throw new Error(payload.message || payload.error || "La accion no pudo completarse.");
+  }
+  return payload;
+}
+
 async function runNow() {
-  showLoading(true, "booting");
-  await fetch("/api/run", { method: "POST" });
-  await fetchStatus();
+  try {
+    showLoading(true, "booting");
+    await apiPost("/api/run");
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    await fetchStatus();
+  }
 }
 
 async function continueManual() {
-  await fetch("/api/continue-manual-login", { method: "POST" });
+  await apiPost("/api/continue-manual-login").catch((error) => alert(error.message));
   await fetchStatus();
 }
 
 async function cancelRun() {
-  await fetch("/api/cancel", { method: "POST" });
+  await apiPost("/api/cancel").catch((error) => alert(error.message));
   await fetchStatus();
 }
 
 async function restartBrowser() {
-  await fetch("/api/restart-browser", { method: "POST" });
+  await apiPost("/api/restart-browser").catch((error) => alert(error.message));
   await fetchStatus();
 }
 
@@ -864,6 +1182,22 @@ function togglePanel() {
   const panel = document.getElementById("sidePanel");
   panelVisible = !panelVisible;
   panel.classList.toggle("hidden", !panelVisible);
+}
+
+function setTvControlsMenu(open) {
+  const menu = document.getElementById("tvControlsMenu");
+  const button = document.getElementById("tvControlsMenuBtn");
+  const dropdown = document.getElementById("tvControlsDropdown");
+  if (!menu || !button || !dropdown) return;
+
+  menu.classList.toggle("open", open);
+  dropdown.classList.toggle("hidden", !open);
+  button.setAttribute("aria-expanded", String(open));
+}
+
+function toggleTvControlsMenu() {
+  const dropdown = document.getElementById("tvControlsDropdown");
+  setTvControlsMenu(dropdown ? dropdown.classList.contains("hidden") : true);
 }
 
 // Event Listeners
@@ -875,6 +1209,11 @@ document.getElementById("refreshBtn").addEventListener("click", fetchStatus);
 
 document.getElementById("searchInput").addEventListener("input", applyFilters);
 document.getElementById("statusFilter").addEventListener("change", applyFilters);
+document.getElementById("operatorModeBtn").addEventListener("click", () => setUiMode("operator"));
+document.getElementById("tvModeBtn").addEventListener("click", () => setUiMode("tv"));
+document.querySelectorAll(".quick-filter").forEach((button) => {
+  button.addEventListener("click", () => setQuickFilter(button.dataset.filter));
+});
 
 document.getElementById("prevPage").addEventListener("click", () => {
   if (currentPage > 1) {
@@ -895,10 +1234,12 @@ document.getElementById("nextPage").addEventListener("click", () => {
 
 document.getElementById("toggleTerminatedBtn").addEventListener("click", () => {
   setTvOverride("hideTerminadas", !tvConfig.hideTerminadas);
+  setTvControlsMenu(false);
 });
 
 document.getElementById("toggleAutoScrollBtn").addEventListener("click", () => {
   setTvOverride("autoScroll", !tvConfig.autoScroll);
+  setTvControlsMenu(false);
 });
 
 document.getElementById("scrollTopBtn").addEventListener("click", () => {
@@ -910,12 +1251,31 @@ document.getElementById("scrollTopBtn").addEventListener("click", () => {
   if (tvConfig.autoScroll) {
     startAutoScroll();
   }
+
+  setTvControlsMenu(false);
+});
+
+document.getElementById("tvControlsMenuBtn").addEventListener("click", (event) => {
+  event.stopPropagation();
+  toggleTvControlsMenu();
+});
+
+document.getElementById("tvControlsDropdown").addEventListener("click", (event) => {
+  event.stopPropagation();
+});
+
+document.addEventListener("click", () => setTvControlsMenu(false));
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") setTvControlsMenu(false);
 });
 
 document.getElementById("togglePanelBtn").addEventListener("click", togglePanel);
 document.getElementById("closePanelBtn").addEventListener("click", togglePanel);
+document.getElementById("closeDetailBtn").addEventListener("click", closeDetail);
 
 // Initial load
+setUiMode(activeUiMode);
+setQuickFilter(quickFilter);
 updateClock();
 setInterval(updateClock, 1000);
 startCarousel();

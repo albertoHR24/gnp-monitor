@@ -14,6 +14,14 @@ Copy `dist\gnp-monitor-windows.zip` to the other Windows PC, extract it, and run
 .\install-windows.cmd
 ```
 
+To create a single portable installer executable instead:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\make-installer-exe.ps1
+```
+
+Copy `dist\GNPMonitorSetup.exe` to the other Windows PC and run it. It extracts the monitor to `%USERPROFILE%\GNPMonitor` and starts `install-windows.cmd`.
+
 The installer:
 
 - creates `.env` from `.env.example` if needed,
