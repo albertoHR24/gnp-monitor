@@ -23,6 +23,17 @@ function parseListEnv(value) {
     .filter(Boolean);
 }
 
+function getBrowserChannel() {
+  const requested = String(process.env.BROWSER_CHANNEL || "").trim();
+  if (!requested) {
+    return process.platform === "win32" ? "msedge" : "";
+  }
+  if (process.platform !== "win32" && requested.toLowerCase() === "msedge") {
+    return "";
+  }
+  return requested;
+}
+
 const CONFIG = {
   port: Number(process.env.PORT || 3000),
   host: process.env.HOST || "127.0.0.1",
@@ -37,7 +48,7 @@ const CONFIG = {
   consultaUrl:
     process.env.CONSULTA_URL ||
     "https://portalintermediarios.gnp.com.mx/home/pagina-iframe?tipo=aplicacion&menu=Todos%20los%20ramos%20Consulta",
-  browserChannel: process.env.BROWSER_CHANNEL || (process.platform === "win32" ? "msedge" : ""),
+  browserChannel: getBrowserChannel(),
   profileDir:
     process.env.PROFILE_DIR ||
     "C:\\Users\\TI\\AppData\\Local\\GNPMonitorProfile",
