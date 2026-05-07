@@ -42,6 +42,17 @@ MONITOR_TOKEN=
 
 `MONITOR_TOKEN` is optional while the monitor only listens on `127.0.0.1`. Set it when exposing the monitor on a LAN or shared PC; POST actions such as run, cancel, continue login, and browser restart will require that token.
 
+For a closed deployment, keep the monitor behind a firewall/VPN whenever possible and restrict the app by IP:
+
+```env
+HOST=0.0.0.0
+MONITOR_TOKEN=use-a-long-random-token
+ALLOWED_IPS=127.0.0.1,192.168.1.50,192.168.1.0/24
+TRUST_PROXY=false
+```
+
+Use `TRUST_PROXY=true` only when the app is behind a trusted reverse proxy that forwards the real client IP. If enabled, configure the proxy/firewall so users cannot bypass it and reach Node directly.
+
 The target PC needs Node.js LTS and Microsoft Edge installed.
 
 Useful Windows scripts:

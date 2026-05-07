@@ -30,12 +30,18 @@ let currentPage = 1;
 let rowsPerPage = 18;
 let filteredData = [];
 let allData = [];
+let bitacoraData = { items: [], alerts: [], sinBitacora: [], summary: {} };
 let diffData = null;
+let expandedBitacoraId = null;
+let expandedBitacoraDetailId = null;
+const bitacoraHistoryCache = new Map();
 let panelVisible = true;
 let statusVersion = null;
 let hiddenTerminatedCount = 0;
 let lastStatusData = null;
 let activeUiMode = localStorage.getItem("gnpUiMode") || "operator";
+let activeMainView = localStorage.getItem("gnpMainView") || "monitor";
+let bitacoraMaximized = false;
 let quickFilter = localStorage.getItem("gnpQuickFilter") || "all";
 let selectedOt = null;
 let carouselTimer = null;
@@ -158,6 +164,7 @@ function getDueInfo(row) {
 }
 
 function matchesQuickFilter(row) {
+  if (activeUiMode === "tv") return true;
   if (quickFilter === "new") return isNewOt(row.ot);
   if (quickFilter === "changed") return isChangedOt(row.ot);
   if (quickFilter === "open") return isOpenRow(row);
@@ -169,6 +176,8 @@ function matchesQuickFilter(row) {
 function updateTvControls() {
   const terminatedBtn = document.getElementById("toggleTerminatedBtn");
   const scrollBtn = document.getElementById("toggleAutoScrollBtn");
+  const soundBtn = document.getElementById("toggleSoundBtn");
+  const fullscreenBtn = document.getElementById("fullscreenBtn");
   if (terminatedBtn) {
     const value = terminatedBtn.querySelector("strong");
     if (value) value.textContent = tvConfig.hideTerminadas ? "Prioritarios" : "Todos";
@@ -178,6 +187,16 @@ function updateTvControls() {
     const value = scrollBtn.querySelector("strong");
     if (value) value.textContent = tvConfig.autoScroll ? "Auto" : "Manual";
     scrollBtn.classList.toggle("active", tvConfig.autoScroll);
+  }
+  if (soundBtn) {
+    const value = soundBtn.querySelector("strong");
+    if (value) value.textContent = tvConfig.soundEnabled ? "On" : "Off";
+    soundBtn.classList.toggle("active", tvConfig.soundEnabled);
+  }
+  if (fullscreenBtn) {
+    const value = fullscreenBtn.querySelector("strong");
+    if (value) value.textContent = document.fullscreenElement ? "Salir" : "Completa";
+    fullscreenBtn.classList.toggle("active", Boolean(document.fullscreenElement));
   }
 }
 
@@ -190,16 +209,34 @@ function setTvOverride(key, value) {
 
 function setUiMode(mode) {
   activeUiMode = mode === "tv" ? "tv" : "operator";
+  if (activeUiMode === "tv") {
+    activeMainView = "monitor";
+    localStorage.setItem("gnpMainView", activeMainView);
+    setQuickFilter("all");
+  }
   localStorage.setItem("gnpUiMode", activeUiMode);
   document.body.classList.toggle("tv-mode", activeUiMode === "tv");
   document.body.classList.toggle("operator-mode", activeUiMode !== "tv");
   document.getElementById("operatorModeBtn").classList.toggle("active", activeUiMode !== "tv");
   document.getElementById("tvModeBtn").classList.toggle("active", activeUiMode === "tv");
+  setMainView(activeMainView);
   currentPage = 1;
   renderTablePage();
   updatePagination();
   startCarousel();
   resetTableScroll(document.getElementById("tableWrap"));
+}
+
+function setMainView(view) {
+  activeMainView = view === "bitacora" && activeUiMode !== "tv" ? "bitacora" : "monitor";
+  localStorage.setItem("gnpMainView", activeMainView);
+  document.body.classList.toggle("bitacora-view", activeMainView === "bitacora");
+  document.body.classList.toggle("monitor-view", activeMainView !== "bitacora");
+  document.getElementById("monitorViewBtn").classList.toggle("active", activeMainView !== "bitacora");
+  document.getElementById("bitacoraViewBtn").classList.toggle("active", activeMainView === "bitacora");
+  if (activeMainView === "bitacora") {
+    renderBitacora();
+  }
 }
 
 function setQuickFilter(filter) {
@@ -218,6 +255,12 @@ function formatClock(value) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function parseDateInputValue(value, endOfDay = false) {
+  if (!value) return null;
+  const date = new Date(`${value}T${endOfDay ? "23:59:59" : "00:00:00"}`);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function minutesSince(value) {
@@ -251,11 +294,13 @@ function appendCell(row, value, options = {}) {
   }
 
   row.appendChild(cell);
+  return cell;
 }
 
 function appendPriorityCell(row, sourceRow) {
   const due = getDueInfo(sourceRow);
   const cell = document.createElement("td");
+  cell.className = "col-field-prioridad";
   const badge = document.createElement("span");
   badge.className = `priority-badge priority-${due.key}`;
   badge.textContent = due.label;
@@ -441,8 +486,9 @@ function renderOperationalSummary() {
 }
 
 function applyFilters() {
-  const searchTerm = normalizeText(document.getElementById("searchInput").value).trim();
-  const statusFilter = normalizeText(document.getElementById("statusFilter").value);
+  const isTvMode = activeUiMode === "tv";
+  const searchTerm = isTvMode ? "" : normalizeText(document.getElementById("searchInput").value).trim();
+  const statusFilter = isTvMode ? "" : normalizeText(document.getElementById("statusFilter").value);
   renderOperationalSummary();
   hiddenTerminatedCount = tvConfig.hideTerminadas
     ? allData.filter((row) => isTerminada(row) && !isStatusChangedOt(row.ot)).length
@@ -487,6 +533,8 @@ function renderTablePage() {
   const tableWrap = document.getElementById("tableWrap");
   const emptyState = document.getElementById("emptyState");
   const loadingState = document.getElementById("loadingState");
+  const emptyTitle = emptyState?.querySelector("h3");
+  const emptyDescription = emptyState?.querySelector("p");
   
   clearElement(tbody);
   
@@ -497,7 +545,20 @@ function renderTablePage() {
   if (!filteredData || !filteredData.length) {
     tableWrap.classList.add("hidden");
     emptyState.style.display = "flex";
-    document.getElementById("tableCount").textContent = "0 registros";
+    document.getElementById("tableCount").textContent = allData.length
+      ? `0 visibles de ${allData.length}`
+      : "0 registros";
+    if (emptyTitle && emptyDescription) {
+      if (allData.length) {
+        emptyTitle.textContent = "Sin registros visibles";
+        emptyDescription.textContent = activeUiMode === "tv"
+          ? "El modo TV esta ocultando registros terminados o sin prioridad."
+          : "Ajusta los filtros para ver los registros cargados.";
+      } else {
+        emptyTitle.textContent = "Sin registros cargados";
+        emptyDescription.textContent = 'Haz clic en "Actualizar" para consultar las ordenes de trabajo';
+      }
+    }
     return;
   }
   
@@ -529,22 +590,22 @@ function renderTablePage() {
       tr.classList.add("row-status-changed");
     }
     
-    appendCell(tr, row.ot, { strong: true });
-    appendCell(tr, row.usuarioCreador);
-    appendCell(tr, row.estatus, { badgeClass });
+    appendCell(tr, row.ot, { strong: true, className: "col-field-ot" });
+    appendCell(tr, row.usuarioCreador, { className: "col-field-usuario" });
+    appendCell(tr, row.estatus, { badgeClass, className: "col-field-estatus" });
     appendPriorityCell(tr, row);
-    appendCell(tr, formatGnpDate(row.fechaCompromiso));
-    appendCell(tr, row.poliza);
-    appendCell(tr, row.agente);
-    appendCell(tr, row.contratante);
-    appendCell(tr, titleCase(row.tipoSolicitud));
-    appendCell(tr, row.producto);
-    appendCell(tr, row.guia);
-    appendCell(tr, formatGnpDate(row.fechaRegistro));
-    appendCell(tr, formatGnpDate(row.primerIngreso));
-    appendCell(tr, formatGnpDate(row.ultimoIngreso));
-    appendCell(tr, row.medioApertura);
-    appendCell(tr, formatRole(row.rol));
+    appendCell(tr, formatGnpDate(row.fechaCompromiso), { className: "col-field-compromiso" });
+    appendCell(tr, row.poliza, { className: "col-field-poliza" });
+    appendCell(tr, row.agente, { className: "col-field-agente" });
+    appendCell(tr, row.contratante, { className: "col-field-contratante" });
+    appendCell(tr, titleCase(row.tipoSolicitud), { className: "col-field-tipo" });
+    appendCell(tr, row.producto, { className: "col-field-producto" });
+    appendCell(tr, row.guia, { className: "col-field-guia" });
+    appendCell(tr, formatGnpDate(row.fechaRegistro), { className: "col-field-registro" });
+    appendCell(tr, formatGnpDate(row.primerIngreso), { className: "col-field-primer-ingreso" });
+    appendCell(tr, formatGnpDate(row.ultimoIngreso), { className: "col-field-ultimo-ingreso" });
+    appendCell(tr, row.medioApertura, { className: "col-field-medio" });
+    appendCell(tr, formatRole(row.rol), { className: "col-field-rol" });
     tr.addEventListener("click", () => selectRow(row.ot));
     tbody.appendChild(tr);
   });
@@ -739,12 +800,626 @@ function renderChanges(diff) {
     list.appendChild(item);
   };
 
-  addItem(`${summary.nuevos} Nuevos`, diff.nuevos, "#10b981");
-  addItem(`${summary.cambiados} Cambiados`, diff.cambiados, "#8b5cf6");
+  addItem(`${summary.nuevos} Nuevos`, diff.nuevos, "#22c55e");
+  addItem(`${summary.cambiados} Cambiados`, diff.cambiados, "#6366f1");
   addItem(`${summary.eliminados} Eliminados`, diff.eliminados, "#ef4444");
 
   clearElement(box);
   box.appendChild(list);
+}
+
+function getBitacoraPayload() {
+  return {
+    id: document.getElementById("bitId").value,
+    folio: document.getElementById("bitFolio").value,
+    poliza: document.getElementById("bitPoliza").value,
+    cliente: document.getElementById("bitCliente").value,
+    tramite: document.getElementById("bitTramite").value,
+    estado: document.getElementById("bitEstado").value,
+    responsable: document.getElementById("bitResponsable").value,
+    fechaEntradaCorreo: document.getElementById("bitEntrada").value,
+    fechaEntrega: document.getElementById("bitEntrega").value,
+    fechaSalida: document.getElementById("bitSalida").value,
+    descripcion: document.getElementById("bitDescripcion").value,
+    comentarios: document.getElementById("bitComentarios").value,
+    aseguradora: document.getElementById("bitAseguradora").value,
+  };
+}
+
+function getOperatorName() {
+  let name = localStorage.getItem("gnpOperatorName") || "";
+  if (!name) {
+    name = window.prompt("Nombre del operador") || "";
+    if (name) {
+      localStorage.setItem("gnpOperatorName", name);
+    }
+  }
+  return name || "Operador local";
+}
+
+function askChangeReason(action) {
+  const reason = window.prompt(`Motivo para ${action}`);
+  return reason ? reason.trim() : "";
+}
+
+function withAuditPayload(payload, reason) {
+  return {
+    ...payload,
+    reason,
+    changedBy: getOperatorName(),
+  };
+}
+
+function showBitacoraNotice(message, type = "success") {
+  const notice = document.getElementById("bitacoraNotice");
+  if (!notice) return;
+  notice.textContent = message;
+  notice.classList.remove("hidden", "error");
+  notice.classList.toggle("error", type === "error");
+}
+
+function clearBitacoraFilters() {
+  const search = document.getElementById("bitSearch");
+  const filter = document.getElementById("bitFilter");
+  const dateFrom = document.getElementById("bitDateFrom");
+  const dateTo = document.getElementById("bitDateTo");
+  if (search) search.value = "";
+  if (filter) filter.value = "";
+  if (dateFrom) dateFrom.value = "";
+  if (dateTo) dateTo.value = "";
+}
+
+function describeBitacoraSave(data) {
+  const save = data?.save;
+  if (!save) {
+    const total = data?.summary?.total ?? data?.items?.length ?? 0;
+    return `Registro guardado. Bitacora actual: ${total} registros.`;
+  }
+
+  const before = Number(save.before?.active ?? 0);
+  const after = Number(save.after?.active ?? 0);
+  const key = [save.folio, save.poliza].filter(Boolean).join(" / ");
+
+  if (save.action === "updated_existing") {
+    return `Ya existia en bitacora (${key}). Actualice ese registro; el total se mantiene en ${after}.`;
+  }
+
+  return `Registro nuevo guardado (${key}). Bitacora: ${before} -> ${after} registros.`;
+}
+
+function resetBitacoraForm() {
+  document.getElementById("bitacoraForm").reset();
+  document.getElementById("bitId").value = "";
+  document.getElementById("bitCancelEdit").classList.add("hidden");
+}
+
+function fillBitacoraForm(entry) {
+  document.getElementById("bitId").value = entry.id || "";
+  document.getElementById("bitFolio").value = entry.folio || "";
+  document.getElementById("bitPoliza").value = entry.poliza || "";
+  document.getElementById("bitCliente").value = entry.cliente || "";
+  document.getElementById("bitTramite").value = entry.tramite || "";
+  document.getElementById("bitEstado").value = entry.estado || "PENDIENTE";
+  document.getElementById("bitResponsable").value = entry.responsable || "";
+  document.getElementById("bitEntrada").value = entry.fechaEntradaCorreo || "";
+  document.getElementById("bitEntrega").value = entry.fechaEntrega || "";
+  document.getElementById("bitSalida").value = entry.fechaSalida || "";
+  document.getElementById("bitDescripcion").value = entry.descripcion || "";
+  document.getElementById("bitComentarios").value = entry.comentarios || "";
+  document.getElementById("bitAseguradora").value = entry.aseguradora || "";
+  document.getElementById("bitCancelEdit").classList.remove("hidden");
+  document.getElementById("bitFolio").focus();
+}
+
+function seguimientoClass(item) {
+  const severity = item && item.seguimiento ? item.seguimiento.severity : "warning";
+  if (severity === "danger") return "seguimiento-danger";
+  if (severity === "ok") return "seguimiento-ok";
+  return "seguimiento-warning";
+}
+
+function formatMatchBy(value) {
+  if (value === "folio") return "Folio / OT";
+  if (value === "poliza") return "Poliza";
+  return "Sin coincidencia";
+}
+
+function normalizeBitacoraKey(value) {
+  return normalizeText(value).replace(/[^a-z0-9]/g, "");
+}
+
+function bitacoraCaseKey(item) {
+  const folio = normalizeBitacoraKey(item.folio || item.monitor?.ot);
+  if (folio) return `folio:${folio}`;
+  const poliza = normalizeBitacoraKey(item.poliza || item.monitor?.poliza);
+  if (poliza) return `poliza:${poliza}`;
+  return `id:${item.id}`;
+}
+
+function collapseBitacoraDuplicates(items) {
+  const groups = new Map();
+  items.forEach((item) => {
+    const key = bitacoraCaseKey(item);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  });
+
+  return Array.from(groups.values()).map((group) => {
+    const [primary, ...duplicates] = group;
+    return {
+      ...primary,
+      duplicateCount: group.length,
+      duplicateItems: duplicates,
+    };
+  });
+}
+
+function sameDisplayValue(left, right) {
+  return normalizeText(displayValue(left)) === normalizeText(displayValue(right));
+}
+
+function bitacoraComparisonRows(item) {
+  const monitor = item.monitor || {};
+  return [
+    { label: "Folio / OT", manual: item.folio, monitor: monitor.ot },
+    { label: "Poliza", manual: item.poliza, monitor: monitor.poliza },
+    { label: "Cliente", manual: item.cliente, monitor: monitor.contratante },
+    { label: "Tramite", manual: item.tramite, monitor: monitor.tipoSolicitud },
+    { label: "Estado", manual: item.estado, monitor: monitor.estatus },
+    { label: "Responsable", manual: item.responsable, monitor: monitor.agente },
+    { label: "Entrega", manual: formatGnpDate(item.fechaEntrega), monitor: formatGnpDate(monitor.fechaCompromiso) },
+    { label: "Comentarios", manual: item.comentarios, monitor: "-" },
+  ].map((row) => {
+    const manual = displayValue(row.manual);
+    const monitorValue = displayValue(row.monitor);
+    const status = monitorValue === "-"
+      ? "missing"
+      : sameDisplayValue(manual, monitorValue)
+        ? "match"
+        : "diff";
+    return { ...row, manual, monitor: monitorValue, status };
+  });
+}
+
+function renderBitacoraDetailRow(item) {
+  const row = document.createElement("tr");
+  row.className = "bitacora-detail-row";
+  const cell = document.createElement("td");
+  cell.colSpan = 14;
+
+  const box = document.createElement("div");
+  box.className = "bitacora-detail-box";
+
+  const header = document.createElement("div");
+  header.className = "bitacora-detail-header";
+  const title = document.createElement("div");
+  const heading = document.createElement("strong");
+  heading.textContent = `Comparativa ${displayValue(item.monitor?.ot || item.folio || item.poliza)}`;
+  const sub = document.createElement("span");
+  sub.textContent = item.monitor
+    ? `Coincidencia por ${formatMatchBy(item.matchBy).toLowerCase()}`
+    : "No hay captura del monitor para este registro";
+  title.append(heading, sub);
+  header.appendChild(title);
+
+  if (item.duplicateCount > 1) {
+    const duplicateBadge = document.createElement("span");
+    duplicateBadge.className = "duplicate-badge";
+    duplicateBadge.textContent = `${item.duplicateCount} registros del mismo caso`;
+    header.appendChild(duplicateBadge);
+  }
+  box.appendChild(header);
+
+  const comparison = document.createElement("div");
+  comparison.className = "comparison-grid";
+  bitacoraComparisonRows(item).forEach((field) => {
+    const line = document.createElement("div");
+    line.className = `comparison-row comparison-${field.status}`;
+    const label = document.createElement("span");
+    label.textContent = field.label;
+    const manual = document.createElement("strong");
+    manual.textContent = field.manual;
+    const monitor = document.createElement("strong");
+    monitor.textContent = field.monitor;
+    line.append(label, manual, monitor);
+    comparison.appendChild(line);
+  });
+  box.appendChild(comparison);
+
+  if (item.duplicateItems?.length) {
+    const duplicates = document.createElement("div");
+    duplicates.className = "duplicate-list";
+    const duplicateTitle = document.createElement("strong");
+    duplicateTitle.textContent = "Duplicados detectados";
+    duplicates.appendChild(duplicateTitle);
+    item.duplicateItems.forEach((duplicate) => {
+      const duplicateLine = document.createElement("span");
+      duplicateLine.textContent = `v${duplicate.version || 1} - ${fmtDate(duplicate.updatedAt)} - ${displayValue(duplicate.comentarios || duplicate.estado)}`;
+      duplicates.appendChild(duplicateLine);
+    });
+    box.appendChild(duplicates);
+  }
+
+  box.appendChild(renderBitacoraHistoryBox(item));
+  cell.appendChild(box);
+  row.appendChild(cell);
+  return row;
+}
+
+function renderBitacoraAlerts(alerts) {
+  const box = document.getElementById("bitacoraAlerts");
+  if (!box) return;
+  clearElement(box);
+
+  if (!alerts || !alerts.length) {
+    const item = document.createElement("div");
+    item.className = "bitacora-alert";
+    const title = document.createElement("strong");
+    title.textContent = "Sin alertas";
+    const detail = document.createElement("span");
+    detail.textContent = "La bitacora va al corriente con el monitor.";
+    item.append(title, detail);
+    box.appendChild(item);
+    return;
+  }
+
+  alerts.slice(0, 8).forEach((alertItem) => {
+    const item = document.createElement("div");
+    item.className = `bitacora-alert ${alertItem.severity === "danger" ? "danger" : ""}`.trim();
+    const title = document.createElement("strong");
+    title.textContent = alertItem.title || "Alerta";
+    const detail = document.createElement("span");
+    detail.textContent = alertItem.message || "Requiere seguimiento.";
+    item.append(title, detail);
+    box.appendChild(item);
+  });
+}
+
+function renderBitacora(data = bitacoraData) {
+  bitacoraData = {
+    items: Array.isArray(data.items) ? data.items : [],
+    archived: Array.isArray(data.archived) ? data.archived : [],
+    alerts: Array.isArray(data.alerts) ? data.alerts : [],
+    sinBitacora: Array.isArray(data.sinBitacora) ? data.sinBitacora : [],
+    summary: data.summary || {},
+    db: data.db || null,
+  };
+
+  const summary = bitacoraData.summary || {};
+  const setText = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = String(value || 0);
+  };
+
+  setText("bitTotal", summary.total);
+  setText("bitCorriente", summary.al_corriente);
+  setText("bitVencidas", summary.vencida);
+  setText("bitInconsistentes", summary.inconsistente);
+  setText("bitSinMonitor", summary.sin_monitor);
+  setText("bitSinBitacora", summary.sin_bitacora);
+  const meta = document.getElementById("bitacoraMeta");
+  if (meta) {
+    const active = bitacoraData.db?.active ?? summary.total ?? 0;
+    const archived = bitacoraData.db?.archived ?? bitacoraData.archived.length ?? 0;
+    meta.textContent = archived
+      ? `${active} activos / ${archived} archivados`
+      : `${active} registros manuales`;
+  }
+
+  renderBitacoraAlerts(bitacoraData.alerts);
+
+  const tbody = document.getElementById("bitacoraTbody");
+  clearElement(tbody);
+
+  const search = normalizeText(document.getElementById("bitSearch").value).trim();
+  const filter = document.getElementById("bitFilter").value;
+  const dateFrom = parseDateInputValue(document.getElementById("bitDateFrom").value);
+  const dateTo = parseDateInputValue(document.getElementById("bitDateTo").value, true);
+  const sourceItems = filter === "archived" ? bitacoraData.archived : bitacoraData.items;
+  const filteredItems = sourceItems.filter((item) => {
+    if (filter !== "archived" && filter && item.seguimiento && item.seguimiento.key !== filter) return false;
+    const updatedAt = item.updatedAt ? new Date(item.updatedAt) : null;
+    if (dateFrom && updatedAt && updatedAt < dateFrom) return false;
+    if (dateTo && updatedAt && updatedAt > dateTo) return false;
+    if (!search) return true;
+    const text = [
+      item.folio,
+      item.poliza,
+      item.cliente,
+      item.tramite,
+      item.estado,
+      item.responsable,
+      item.comentarios,
+      item.monitor && item.monitor.ot,
+      item.monitor && item.monitor.poliza,
+      item.monitor && item.monitor.contratante,
+      item.monitor && item.monitor.estatus,
+    ].join(" ");
+    return normalizeText(text).includes(search);
+  });
+  const items = collapseBitacoraDuplicates(filteredItems);
+
+  if (!items.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 14;
+    cell.textContent = "Sin registros de bitacora para mostrar.";
+    row.appendChild(cell);
+    tbody.appendChild(row);
+    return;
+  }
+
+  items.forEach((item) => {
+    const row = document.createElement("tr");
+    row.className = "bitacora-clickable-row";
+    row.addEventListener("click", () => toggleBitacoraDetail(item.id));
+    const seguimiento = document.createElement("td");
+    const badge = document.createElement("span");
+    badge.className = `seguimiento-badge ${seguimientoClass(item)}`;
+    badge.textContent = item.seguimiento ? item.seguimiento.label : "Pendiente";
+    seguimiento.appendChild(badge);
+    row.appendChild(seguimiento);
+
+    const caseCell = appendCell(row, item.monitor && item.monitor.ot ? item.monitor.ot : item.folio, { strong: true });
+    if (item.duplicateCount > 1) {
+      const count = document.createElement("span");
+      count.className = "duplicate-count";
+      count.textContent = `x${item.duplicateCount}`;
+      caseCell.appendChild(count);
+    }
+    appendCell(row, formatMatchBy(item.matchBy));
+    appendCell(row, item.poliza);
+    appendCell(row, item.monitor && item.monitor.poliza);
+    appendCell(row, item.cliente || (item.monitor && item.monitor.contratante));
+    appendCell(row, item.tramite);
+    appendCell(row, item.estado);
+    appendCell(row, item.monitor ? item.monitor.estatus : "Sin captura");
+    appendCell(row, item.responsable);
+    appendCell(row, formatGnpDate(item.fechaEntrega || (item.monitor && item.monitor.fechaCompromiso)));
+    appendCell(row, item.comentarios);
+    appendCell(row, `v${item.version || 1} - ${fmtDate(item.updatedAt)}`);
+
+    const actions = document.createElement("td");
+    const wrapper = document.createElement("div");
+    wrapper.className = "bitacora-actions-cell";
+    const history = document.createElement("button");
+    history.className = "bitacora-mini-btn";
+    history.type = "button";
+    history.setAttribute("aria-label", `Ver historial (${item.historyCount || item.version || 1})`);
+    history.textContent = expandedBitacoraDetailId === item.id ? "Ocultar" : `Hist. ${item.historyCount || item.version || 1}`;
+    history.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleBitacoraDetail(item.id);
+    });
+    const edit = document.createElement("button");
+    edit.className = "bitacora-mini-btn";
+    edit.type = "button";
+    edit.setAttribute("aria-label", "Editar");
+    edit.textContent = "Edit.";
+    edit.disabled = Boolean(item.archivedAt);
+    edit.addEventListener("click", (event) => {
+      event.stopPropagation();
+      fillBitacoraForm(item);
+    });
+    const archive = document.createElement("button");
+    archive.className = "bitacora-mini-btn";
+    archive.type = "button";
+    archive.setAttribute("aria-label", item.archivedAt ? "Restaurar registro archivado" : "Archivar sin borrar historial");
+    archive.textContent = item.archivedAt ? "Rest." : "Arch.";
+    archive.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (item.archivedAt) {
+        restoreBitacoraEntry(item.id);
+      } else {
+        archiveBitacoraEntry(item.id);
+      }
+    });
+    wrapper.append(history, edit, archive);
+    actions.appendChild(wrapper);
+    row.appendChild(actions);
+    if (item.archivedAt) {
+      row.classList.add("archived-row");
+    }
+    tbody.appendChild(row);
+
+    if (expandedBitacoraDetailId === item.id) {
+      tbody.appendChild(renderBitacoraDetailRow(item));
+    }
+  });
+}
+
+function bitacoraActionLabel(action) {
+  return {
+    create: "Creacion",
+    import: "Importacion",
+    migrate: "Migracion",
+    update: "Edicion",
+    archive: "Archivado",
+    restore: "Restaurado",
+  }[action] || titleCase(action);
+}
+
+function summarizeHistoryChange(item) {
+  if (!item.before || !item.after) {
+    return item.after ? "Registro inicial capturado automaticamente." : "Sin detalle.";
+  }
+  const labels = {
+    folio: "Folio / OT",
+    poliza: "Poliza",
+    cliente: "Cliente",
+    tramite: "Tramite",
+    estado: "Estado",
+    responsable: "Responsable",
+    fechaEntrega: "Entrega",
+    fechaSalida: "Salida",
+    comentarios: "Comentarios",
+    archivedAt: "Archivado",
+  };
+  const changes = Object.keys(labels)
+    .filter((key) => displayValue(item.before[key]) !== displayValue(item.after[key]))
+    .map((key) => `${labels[key]}: "${displayValue(item.before[key])}" -> "${displayValue(item.after[key])}"`);
+  return changes.length ? changes.join("; ") : "Sin cambios visibles en campos principales.";
+}
+
+function renderBitacoraHistoryBox(item) {
+  const box = document.createElement("div");
+  box.className = "bitacora-history-box";
+  const cached = bitacoraHistoryCache.get(item.id);
+
+  if (!cached) {
+    box.textContent = "Cargando historial...";
+  } else if (!cached.history.length) {
+    box.textContent = "Sin historial registrado.";
+  } else {
+    cached.history.forEach((entry) => {
+      const line = document.createElement("div");
+      line.className = "bitacora-history-item";
+      const title = document.createElement("strong");
+      title.textContent = `v${entry.version} - ${bitacoraActionLabel(entry.action)} - ${fmtDate(entry.changedAt)} - ${entry.changedBy || "Sistema"}`;
+      const detail = document.createElement("span");
+      detail.textContent = [entry.reason, summarizeHistoryChange(entry)].filter(Boolean).join(" | ");
+      line.append(title, detail);
+      box.appendChild(line);
+    });
+  }
+
+  return box;
+}
+
+async function toggleBitacoraDetail(id) {
+  expandedBitacoraDetailId = expandedBitacoraDetailId === id ? null : id;
+  expandedBitacoraId = expandedBitacoraDetailId;
+  renderBitacora();
+  if (!expandedBitacoraDetailId || bitacoraHistoryCache.has(id)) {
+    return;
+  }
+
+  try {
+    const data = await apiJson(`/api/bitacora/${encodeURIComponent(id)}/history`);
+    bitacoraHistoryCache.set(id, data);
+    renderBitacora();
+  } catch (error) {
+    bitacoraHistoryCache.set(id, { ok: true, history: [] });
+    renderBitacora();
+    console.warn("No pude cargar historial:", error);
+  }
+}
+
+async function saveBitacoraEntry(event) {
+  event.preventDefault();
+  const payload = getBitacoraPayload();
+  if (!payload.folio && !payload.poliza) {
+    showBitacoraNotice("Captura folio/OT o poliza para poder comparar con el monitor.", "error");
+    return;
+  }
+
+  const saveButton = document.getElementById("bitSaveBtn");
+  const previousSaveText = saveButton ? saveButton.textContent : "";
+  try {
+    if (saveButton) {
+      saveButton.disabled = true;
+      saveButton.textContent = "Guardando...";
+    }
+    const id = payload.id;
+    const reason = id ? askChangeReason("guardar la modificacion") : "Captura inicial";
+    if (id && !reason) return;
+    const data = await apiJson(id ? `/api/bitacora/${encodeURIComponent(id)}` : "/api/bitacora", {
+      method: id ? "PUT" : "POST",
+      body: JSON.stringify(withAuditPayload(payload, reason)),
+    });
+    if (id) bitacoraHistoryCache.delete(id);
+    clearBitacoraFilters();
+    resetBitacoraForm();
+    renderBitacora(data);
+    showBitacoraNotice(describeBitacoraSave(data));
+  } catch (error) {
+    showBitacoraNotice(`No se guardo: ${error.message}`, "error");
+  } finally {
+    if (saveButton) {
+      saveButton.disabled = false;
+      saveButton.textContent = previousSaveText || "Guardar";
+    }
+  }
+}
+
+async function archiveBitacoraEntry(id) {
+  if (!id) return;
+  const reason = askChangeReason("archivar este registro");
+  if (!reason) return;
+  try {
+    const data = await apiJson(`/api/bitacora/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      body: JSON.stringify(withAuditPayload({}, reason)),
+    });
+    if (expandedBitacoraId === id) expandedBitacoraId = null;
+    if (expandedBitacoraDetailId === id) expandedBitacoraDetailId = null;
+    bitacoraHistoryCache.delete(id);
+    renderBitacora(data);
+    showBitacoraNotice("Registro archivado.");
+  } catch (error) {
+    showBitacoraNotice(`No se archivo: ${error.message}`, "error");
+  }
+}
+
+async function restoreBitacoraEntry(id) {
+  if (!id) return;
+  const reason = askChangeReason("restaurar este registro");
+  if (!reason) return;
+  try {
+    const data = await apiJson(`/api/bitacora/${encodeURIComponent(id)}/restore`, {
+      method: "POST",
+      body: JSON.stringify(withAuditPayload({}, reason)),
+    });
+    if (expandedBitacoraId === id) expandedBitacoraId = null;
+    if (expandedBitacoraDetailId === id) expandedBitacoraDetailId = null;
+    bitacoraHistoryCache.delete(id);
+    renderBitacora(data);
+    showBitacoraNotice("Registro restaurado.");
+  } catch (error) {
+    showBitacoraNotice(`No se restauro: ${error.message}`, "error");
+  }
+}
+
+async function importBitacoraExcel(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const data = await apiJson("/api/bitacora/import-excel", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Change-Reason": "Importacion desde Excel",
+        "X-Operator": getOperatorName(),
+      },
+      body: buffer,
+    });
+    bitacoraHistoryCache.clear();
+    renderBitacora(data);
+    const stats = data.import || {};
+    showBitacoraNotice(`Excel importado. Nuevos: ${stats.inserted || 0}. Actualizados: ${stats.updated || 0}.`);
+  } catch (error) {
+    showBitacoraNotice(`No se importo el Excel: ${error.message}`, "error");
+  }
+}
+
+function setBitacoraMaximized(maximized) {
+  bitacoraMaximized = Boolean(maximized);
+  document.body.classList.toggle("bitacora-maximized", bitacoraMaximized);
+  const button = document.getElementById("bitMaximizeBtn");
+  if (button) {
+    const text = bitacoraMaximized ? "Restaurar" : "Maximizar";
+    const label = button.querySelector("span") || button;
+    label.textContent = text;
+    button.title = text;
+    button.setAttribute("aria-label", text);
+  }
+}
+
+function toggleBitacoraMaximized() {
+  setBitacoraMaximized(!bitacoraMaximized);
 }
 
 function appendDetailField(container, label, value) {
@@ -1019,18 +1694,30 @@ function showLoading(show, mode) {
   const loadingState = document.getElementById("loadingState");
   const emptyState = document.getElementById("emptyState");
   const tableWrap = document.getElementById("tableWrap");
+  const tableContainer = document.querySelector(".table-container");
   const loadingTitle = document.getElementById("loadingTitle");
   const loadingDesc = document.getElementById("loadingDesc");
   
   if (show) {
-    loadingState.classList.remove("hidden");
     emptyState.style.display = "none";
-    tableWrap.classList.add("hidden");
+    const keepTvTableVisible = activeUiMode === "tv" && filteredData.length > 0;
+    loadingState.classList.toggle("hidden", keepTvTableVisible);
+    tableWrap.classList.toggle("hidden", !keepTvTableVisible);
+    if (tableContainer) {
+      tableContainer.classList.toggle("updating", keepTvTableVisible);
+      tableContainer.dataset.loadingTitle = modeLabels[mode] || "Actualizando";
+      tableContainer.dataset.loadingDesc = loadingMessages[mode] || "Proceso en ejecucion...";
+    }
     
     loadingTitle.textContent = modeLabels[mode] || "Procesando";
     loadingDesc.textContent = loadingMessages[mode] || "Por favor espera...";
   } else {
     loadingState.classList.add("hidden");
+    if (tableContainer) {
+      tableContainer.classList.remove("updating");
+      delete tableContainer.dataset.loadingTitle;
+      delete tableContainer.dataset.loadingDesc;
+    }
   }
 }
 
@@ -1057,19 +1744,21 @@ function renderStatus(data) {
     updatePagination();
   }
 
-  document.getElementById("statusLabel").textContent = modeLabels[data.mode] || data.mode || "Listo";
-  document.getElementById("statusMessage").textContent = data.message || "Sin actividad";
-  document.getElementById("statusSecondary").textContent =
-    data.error || (data.busy ? "Proceso en ejecucion..." : "Esperando");
-  document.getElementById("sumTotal").textContent = String(summary.totalActual ?? (data.data || []).length ?? 0);
-  document.getElementById("sumNuevos").textContent = String(summary.nuevos ?? 0);
-  document.getElementById("sumCambiados").textContent = String(summary.cambiados ?? 0);
-  document.getElementById("sumEliminados").textContent = String(summary.eliminados ?? 0);
-  document.getElementById("lastUpdateChip").textContent = fmtDate(data.lastUpdate);
-  document.getElementById("sessionChip").textContent =
-    data.sessionInfo && data.sessionInfo.alive ? "Activa" : "No verificada";
-  document.getElementById("urlChip").textContent =
-    data.sessionInfo && data.sessionInfo.lastUrl ? data.sessionInfo.lastUrl : "-";
+  const setText = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  };
+
+  setText("statusLabel", modeLabels[data.mode] || data.mode || "Listo");
+  setText("statusMessage", data.message || "Sin actividad");
+  setText("statusSecondary", data.error || (data.busy ? "Proceso en ejecucion..." : "Esperando"));
+  setText("sumTotal", String(summary.totalActual ?? (data.data || []).length ?? 0));
+  setText("sumNuevos", String(summary.nuevos ?? 0));
+  setText("sumCambiados", String(summary.cambiados ?? 0));
+  setText("sumEliminados", String(summary.eliminados ?? 0));
+  setText("lastUpdateChip", fmtDate(data.lastUpdate));
+  setText("sessionChip", data.sessionInfo && data.sessionInfo.alive ? "Activa" : "No verificada");
+  setText("urlChip", data.sessionInfo && data.sessionInfo.lastUrl ? data.sessionInfo.lastUrl : "-");
 
   document.getElementById("runBtn").disabled = Boolean(data.busy);
   document.getElementById("cancelBtn").disabled = !data.busy;
@@ -1089,6 +1778,9 @@ function renderStatus(data) {
   maybePlayAlertSound(diffData);
   renderTvMeta(data);
   renderOperationalSummary();
+  if (data.bitacora) {
+    renderBitacora(data.bitacora);
+  }
   
   if (data.dataVersion) {
     statusVersion = data.dataVersion;
@@ -1101,16 +1793,26 @@ function renderStatus(data) {
     }
     allData = nextData;
     applyFilters();
+  } else if (!allData.length && Number(summary.totalActual || 0) > 0) {
+    statusVersion = null;
+    setTimeout(fetchFullStatus, 0);
   }
 }
 
 async function fetchStatus() {
   try {
-    const query = statusVersion ? `?since=${encodeURIComponent(statusVersion)}` : "";
-    const response = await fetch(`/api/status${query}`);
-    renderStatus(await response.json());
+    const query = statusVersion && allData.length ? `?since=${encodeURIComponent(statusVersion)}` : "";
+    renderStatus(await apiJson(`/api/status${query}`));
   } catch (err) {
     console.error("Error fetching status:", err);
+  }
+}
+
+async function fetchFullStatus() {
+  try {
+    renderStatus(await apiJson("/api/status?full=1"));
+  } catch (err) {
+    console.error("Error fetching full status:", err);
   }
 }
 
@@ -1127,29 +1829,60 @@ function promptForMonitorToken() {
 }
 
 async function apiPost(path) {
+  return apiJson(path, { method: "POST" });
+}
+
+async function apiJson(path, options = {}) {
   const headers = {};
+  const optionHeaders = options.headers || {};
+  if (options.body && !optionHeaders["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
   const token = getMonitorToken();
   if (token) {
     headers["X-Monitor-Token"] = token;
   }
 
-  let response = await fetch(path, { method: "POST", headers });
+  let response = await fetch(path, { ...options, headers: { ...headers, ...optionHeaders } });
   if (response.status === 401) {
     const nextToken = promptForMonitorToken();
     if (!nextToken) {
       throw new Error("Token local requerido.");
     }
     response = await fetch(path, {
-      method: "POST",
-      headers: { "X-Monitor-Token": nextToken },
+      ...options,
+      headers: {
+        ...headers,
+        ...optionHeaders,
+        "X-Monitor-Token": nextToken,
+      },
     });
   }
 
-  const payload = await response.json().catch(() => ({}));
+  const responseText = await response.text().catch(() => "");
+  let payload = {};
+  try {
+    payload = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    payload = {};
+  }
   if (!response.ok || payload.ok === false) {
-    throw new Error(payload.message || payload.error || "La accion no pudo completarse.");
+    const detail = responseText && responseText.length < 180 ? responseText : "";
+    throw new Error(
+      payload.message ||
+        payload.error ||
+        detail ||
+        `La accion no pudo completarse. HTTP ${response.status}`
+    );
   }
   return payload;
+}
+
+function openBitacoraExcel(event) {
+  event.preventDefault();
+  const token = getMonitorToken() || promptForMonitorToken();
+  const query = token ? `?monitorToken=${encodeURIComponent(token)}` : "";
+  window.location.href = `/api/bitacora/excel${query}`;
 }
 
 async function runNow() {
@@ -1200,6 +1933,20 @@ function toggleTvControlsMenu() {
   setTvControlsMenu(dropdown ? dropdown.classList.contains("hidden") : true);
 }
 
+async function toggleFullscreen() {
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else {
+      await document.documentElement.requestFullscreen();
+    }
+  } catch (error) {
+    console.warn("No se pudo cambiar pantalla completa", error);
+  } finally {
+    updateTvControls();
+  }
+}
+
 // Event Listeners
 document.getElementById("runBtn").addEventListener("click", runNow);
 document.getElementById("manualBtn").addEventListener("click", continueManual);
@@ -1209,8 +1956,19 @@ document.getElementById("refreshBtn").addEventListener("click", fetchStatus);
 
 document.getElementById("searchInput").addEventListener("input", applyFilters);
 document.getElementById("statusFilter").addEventListener("change", applyFilters);
+document.getElementById("bitacoraForm").addEventListener("submit", saveBitacoraEntry);
+document.getElementById("bitCancelEdit").addEventListener("click", resetBitacoraForm);
+document.getElementById("bitSearch").addEventListener("input", () => renderBitacora());
+document.getElementById("bitFilter").addEventListener("change", () => renderBitacora());
+document.getElementById("bitDateFrom").addEventListener("change", () => renderBitacora());
+document.getElementById("bitDateTo").addEventListener("change", () => renderBitacora());
+document.getElementById("bitExcelInput").addEventListener("change", importBitacoraExcel);
+document.getElementById("bitExcelLink").addEventListener("click", openBitacoraExcel);
+document.getElementById("bitMaximizeBtn").addEventListener("click", toggleBitacoraMaximized);
 document.getElementById("operatorModeBtn").addEventListener("click", () => setUiMode("operator"));
 document.getElementById("tvModeBtn").addEventListener("click", () => setUiMode("tv"));
+document.getElementById("monitorViewBtn").addEventListener("click", () => setMainView("monitor"));
+document.getElementById("bitacoraViewBtn").addEventListener("click", () => setMainView("bitacora"));
 document.querySelectorAll(".quick-filter").forEach((button) => {
   button.addEventListener("click", () => setQuickFilter(button.dataset.filter));
 });
@@ -1242,6 +2000,16 @@ document.getElementById("toggleAutoScrollBtn").addEventListener("click", () => {
   setTvControlsMenu(false);
 });
 
+document.getElementById("toggleSoundBtn").addEventListener("click", () => {
+  setTvOverride("soundEnabled", !tvConfig.soundEnabled);
+  setTvControlsMenu(false);
+});
+
+document.getElementById("fullscreenBtn").addEventListener("click", () => {
+  toggleFullscreen();
+  setTvControlsMenu(false);
+});
+
 document.getElementById("scrollTopBtn").addEventListener("click", () => {
   const tableWrap = document.getElementById("tableWrap");
   if (!tableWrap) return;
@@ -1266,8 +2034,13 @@ document.getElementById("tvControlsDropdown").addEventListener("click", (event) 
 
 document.addEventListener("click", () => setTvControlsMenu(false));
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") setTvControlsMenu(false);
+  if (event.key === "Escape") {
+    if (activeUiMode === "tv") setUiMode("operator");
+    setTvControlsMenu(false);
+    if (bitacoraMaximized) setBitacoraMaximized(false);
+  }
 });
+document.addEventListener("fullscreenchange", updateTvControls);
 
 document.getElementById("togglePanelBtn").addEventListener("click", togglePanel);
 document.getElementById("closePanelBtn").addEventListener("click", togglePanel);

@@ -3,11 +3,11 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+const Database = require("better-sqlite3");
+const XLSX = require("xlsx");
 const { chromium } = require("playwright");
 
 const app = express();
-app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
 
 function parseBooleanEnv(value, fallback = false) {
   if (value === undefined || value === null || value === "") {
@@ -16,10 +16,19 @@ function parseBooleanEnv(value, fallback = false) {
   return ["1", "true", "yes", "si"].includes(String(value).trim().toLowerCase());
 }
 
+function parseListEnv(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 const CONFIG = {
   port: Number(process.env.PORT || 3000),
   host: process.env.HOST || "127.0.0.1",
   monitorToken: process.env.MONITOR_TOKEN || "",
+  allowedIps: parseListEnv(process.env.ALLOWED_IPS),
+  trustProxy: parseBooleanEnv(process.env.TRUST_PROXY, false),
   loginUrl: process.env.LOGIN_URL || "https://portalintermediarios.gnp.com.mx/sesion",
   dashboardUrl:
     process.env.DASHBOARD_URL ||
@@ -67,8 +76,15 @@ const CONFIG = {
   extractedFile: path.join(__dirname, "data", "items-extraidos.json"),
   debugCapturedFile: path.join(__dirname, "data", "debug-captured.json"),
   debugRequestsFile: path.join(__dirname, "data", "debug-requests.json"),
+  bitacoraFile: path.join(__dirname, "data", "bitacora.json"),
+  bitacoraExcelFile: path.join(__dirname, "data", "bitacora-seguimiento.xls"),
+  databaseFile: path.join(__dirname, "data", "gnp-monitor.db"),
   logFile: path.join(__dirname, "data", "monitor.log"),
 };
+
+if (CONFIG.trustProxy) {
+  app.set("trust proxy", true);
+}
 
 for (const dir of [CONFIG.dataDir, CONFIG.screenshotsDir]) {
   if (!fs.existsSync(dir)) {
@@ -205,6 +221,7 @@ const WORKFLOW_TARGET = {
 };
 
 const DIRECT_QUERY_LIMIT = 50;
+let db = null;
 
 function writeJson(file, data) {
   const tempFile = `${file}.${process.pid}.${Date.now()}.tmp`;
@@ -374,6 +391,1075 @@ function parseGnpDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function normalizeTrackingKey(value) {
+  return normalizeLoose(value).replace(/[^a-z0-9]/g, "");
+}
+
+function normalizePolicyKey(value) {
+  const compact = normalizeTrackingKey(value);
+  return compact.replace(/^0+/, "") || compact;
+}
+
+function makeBitacoraId() {
+  return `bit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function initDatabase() {
+  if (db) {
+    return db;
+  }
+
+  db = new Database(CONFIG.databaseFile);
+  db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS bitacora (
+      id TEXT PRIMARY KEY,
+      dias_atraso TEXT,
+      fecha_entrada_correo TEXT,
+      fecha_entrega TEXT,
+      tramite TEXT,
+      estado TEXT,
+      cliente TEXT,
+      poliza TEXT,
+      aseguradora TEXT,
+      descripcion TEXT,
+      folio TEXT,
+      comentarios TEXT,
+      fecha_salida TEXT,
+      responsable TEXT,
+      version INTEGER NOT NULL DEFAULT 1,
+      archived_at TEXT,
+      archived_reason TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_bitacora_folio ON bitacora(folio);
+    CREATE INDEX IF NOT EXISTS idx_bitacora_poliza ON bitacora(poliza);
+    CREATE INDEX IF NOT EXISTS idx_bitacora_responsable ON bitacora(responsable);
+
+    CREATE TABLE IF NOT EXISTS bitacora_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entry_id TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      action TEXT NOT NULL,
+      changed_at TEXT NOT NULL,
+      changed_by TEXT,
+      reason TEXT,
+      before_json TEXT,
+      after_json TEXT,
+      FOREIGN KEY (entry_id) REFERENCES bitacora(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_bitacora_history_entry ON bitacora_history(entry_id, version DESC);
+
+    CREATE TABLE IF NOT EXISTS monitor_snapshots (
+      id TEXT PRIMARY KEY,
+      captured_at TEXT NOT NULL,
+      source TEXT,
+      total INTEGER NOT NULL DEFAULT 0,
+      diff_json TEXT,
+      raw_json TEXT,
+      debug_json TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS monitor_rows (
+      snapshot_id TEXT NOT NULL,
+      ot TEXT,
+      usuario_creador TEXT,
+      estatus TEXT,
+      poliza TEXT,
+      agente TEXT,
+      contratante TEXT,
+      tipo_solicitud TEXT,
+      producto TEXT,
+      fecha_compromiso TEXT,
+      fecha_registro TEXT,
+      primer_ingreso TEXT,
+      ultimo_ingreso TEXT,
+      guia TEXT,
+      medio_apertura TEXT,
+      rol TEXT,
+      row_json TEXT,
+      PRIMARY KEY (snapshot_id, ot),
+      FOREIGN KEY (snapshot_id) REFERENCES monitor_snapshots(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_monitor_rows_ot ON monitor_rows(ot);
+    CREATE INDEX IF NOT EXISTS idx_monitor_rows_poliza ON monitor_rows(poliza);
+    CREATE INDEX IF NOT EXISTS idx_monitor_rows_agente ON monitor_rows(agente);
+
+    CREATE TABLE IF NOT EXISTS bitacora_comparativas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      snapshot_id TEXT,
+      generated_at TEXT NOT NULL,
+      summary_json TEXT NOT NULL,
+      FOREIGN KEY (snapshot_id) REFERENCES monitor_snapshots(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS alertas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      comparison_id INTEGER,
+      type TEXT,
+      severity TEXT,
+      title TEXT,
+      message TEXT,
+      ot TEXT,
+      entry_id TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (comparison_id) REFERENCES bitacora_comparativas(id) ON DELETE CASCADE
+    );
+  `);
+
+  ensureBitacoraAuditSchema(db);
+  migrateBitacoraJsonToDb();
+  return db;
+}
+
+function ensureBitacoraAuditSchema(database) {
+  const columns = new Set(database.prepare("PRAGMA table_info(bitacora)").all().map((column) => column.name));
+  const addColumn = (name, sql) => {
+    if (!columns.has(name)) {
+      database.exec(`ALTER TABLE bitacora ADD COLUMN ${sql}`);
+      columns.add(name);
+    }
+  };
+
+  addColumn("version", "version INTEGER NOT NULL DEFAULT 1");
+  addColumn("archived_at", "archived_at TEXT");
+  addColumn("archived_reason", "archived_reason TEXT");
+  database.exec("UPDATE bitacora SET archived_at = NULL WHERE archived_at = ''");
+  database.exec("CREATE INDEX IF NOT EXISTS idx_bitacora_archived_at ON bitacora(archived_at)");
+
+  const historyColumns = new Set(database.prepare("PRAGMA table_info(bitacora_history)").all().map((column) => column.name));
+  const addHistoryColumn = (name, sql) => {
+    if (!historyColumns.has(name)) {
+      database.exec(`ALTER TABLE bitacora_history ADD COLUMN ${sql}`);
+      historyColumns.add(name);
+    }
+  };
+
+  addHistoryColumn("changed_by", "changed_by TEXT");
+  addHistoryColumn("reason", "reason TEXT");
+}
+
+function migrateBitacoraJsonToDb() {
+  const database = db || initDatabase();
+  const count = database.prepare("SELECT COUNT(*) AS total FROM bitacora").get().total;
+  if (count > 0 || !fs.existsSync(CONFIG.bitacoraFile)) {
+    return;
+  }
+
+  const entries = readJsonSafe(CONFIG.bitacoraFile, []);
+  if (!Array.isArray(entries) || !entries.length) {
+    return;
+  }
+
+  const insert = database.prepare(`
+    INSERT OR IGNORE INTO bitacora (
+      id, dias_atraso, fecha_entrada_correo, fecha_entrega, tramite, estado, cliente,
+      poliza, aseguradora, descripcion, folio, comentarios, fecha_salida, responsable,
+      version, archived_at, archived_reason, created_at, updated_at
+    ) VALUES (
+      @id, @diasAtraso, @fechaEntradaCorreo, @fechaEntrega, @tramite, @estado, @cliente,
+      @poliza, @aseguradora, @descripcion, @folio, @comentarios, @fechaSalida, @responsable,
+      @version, @archivedAt, @archivedReason, @createdAt, @updatedAt
+    )
+  `);
+
+  const migrate = database.transaction((items) => {
+    for (const item of items) {
+      const entry = sanitizeBitacoraEntry(item);
+      insert.run(entry);
+      recordBitacoraHistory(database, entry.id, entry.version, "migrate", null, entry, {
+        changedBy: "Sistema",
+        reason: "Migracion desde bitacora.json",
+      });
+    }
+  });
+  migrate(entries);
+}
+
+function dbRowToBitacora(row) {
+  return {
+    id: row.id,
+    diasAtraso: row.dias_atraso || "",
+    fechaEntradaCorreo: row.fecha_entrada_correo || "",
+    fechaEntrega: row.fecha_entrega || "",
+    tramite: row.tramite || "",
+    estado: row.estado || "",
+    cliente: row.cliente || "",
+    poliza: row.poliza || "",
+    aseguradora: row.aseguradora || "",
+    descripcion: row.descripcion || "",
+    folio: row.folio || "",
+    comentarios: row.comentarios || "",
+    fechaSalida: row.fecha_salida || "",
+    responsable: row.responsable || "",
+    version: Number(row.version || 1),
+    archivedAt: row.archived_at || "",
+    archivedReason: row.archived_reason || "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function readBitacora(options = {}) {
+  const includeArchived = Boolean(options.includeArchived);
+  const onlyArchived = Boolean(options.onlyArchived);
+  if (db) {
+    const where = onlyArchived
+      ? "WHERE archived_at IS NOT NULL AND archived_at <> ''"
+      : includeArchived
+        ? ""
+        : "WHERE archived_at IS NULL OR archived_at = ''";
+    return db
+      .prepare(`SELECT * FROM bitacora ${where} ORDER BY updated_at DESC, created_at DESC`)
+      .all()
+      .map(dbRowToBitacora);
+  }
+
+  const items = readJsonSafe(CONFIG.bitacoraFile, []);
+  if (!Array.isArray(items)) {
+    return [];
+  }
+  return includeArchived ? items : items.filter((item) => !item.archivedAt);
+}
+
+function countBitacoraRecords() {
+  const database = initDatabase();
+  return {
+    total: database.prepare("SELECT COUNT(*) AS total FROM bitacora").get().total,
+    active: database.prepare("SELECT COUNT(*) AS total FROM bitacora WHERE archived_at IS NULL OR archived_at = ''").get().total,
+    archived: database.prepare("SELECT COUNT(*) AS total FROM bitacora WHERE archived_at IS NOT NULL AND archived_at <> ''").get().total,
+  };
+}
+
+function sanitizeBitacoraEntry(input = {}, previous = {}) {
+  const now = nowIso();
+  const clean = {
+    ...previous,
+    id: normalizeText(previous.id || input.id) || makeBitacoraId(),
+    diasAtraso: normalizeText(input.diasAtraso),
+    fechaEntradaCorreo: normalizeText(input.fechaEntradaCorreo),
+    fechaEntrega: normalizeText(input.fechaEntrega),
+    tramite: normalizeText(input.tramite),
+    estado: normalizeText(input.estado),
+    cliente: normalizeText(input.cliente),
+    poliza: normalizeText(input.poliza),
+    aseguradora: normalizeText(input.aseguradora),
+    descripcion: normalizeText(input.descripcion),
+    folio: normalizeText(input.folio),
+    comentarios: normalizeText(input.comentarios),
+    fechaSalida: normalizeText(input.fechaSalida),
+    responsable: normalizeText(input.responsable),
+    version: Number(previous.version || input.version || 1),
+    archivedAt: normalizeText(previous.archivedAt || input.archivedAt) || null,
+    archivedReason: normalizeText(previous.archivedReason || input.archivedReason),
+    updatedAt: now,
+  };
+
+  if (!clean.createdAt) {
+    clean.createdAt = now;
+  }
+
+  return clean;
+}
+
+function normalizeHeader(value) {
+  return normalizeLoose(value).replace(/[^a-z0-9]/g, "");
+}
+
+function excelValueToText(value) {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  if (typeof value === "number" && value > 25000 && value < 80000) {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (parsed) {
+      return `${String(parsed.y).padStart(4, "0")}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
+    }
+  }
+  return normalizeText(value);
+}
+
+function pickExcelValue(row, headerMap, names) {
+  for (const name of names) {
+    const index = headerMap.get(normalizeHeader(name));
+    if (index !== undefined) {
+      const value = excelValueToText(row[index]);
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return "";
+}
+
+function findExcelHeaderRow(rows) {
+  let best = { index: -1, score: 0 };
+  rows.forEach((row, index) => {
+    const headers = new Set((row || []).map(normalizeHeader));
+    const score = [
+      "folio",
+      "poliza",
+      "cliente",
+      "estado",
+      "tramite",
+      "comentarios",
+      "fechadeentrega",
+      "fechadeentradacorreo",
+    ].filter((header) => headers.has(header)).length;
+    if (score > best.score) {
+      best = { index, score };
+    }
+  });
+  return best.score >= 2 ? best.index : -1;
+}
+
+function parseBitacoraExcel(buffer) {
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const sheetName =
+    workbook.SheetNames.find((name) => normalizeLoose(name).includes("pendientes")) ||
+    workbook.SheetNames[0];
+  if (!sheetName) {
+    return [];
+  }
+
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+    header: 1,
+    raw: true,
+    defval: "",
+  });
+  const headerIndex = findExcelHeaderRow(rows);
+  if (headerIndex === -1) {
+    return [];
+  }
+
+  const headers = rows[headerIndex] || [];
+  const headerMap = new Map();
+  headers.forEach((header, index) => {
+    const key = normalizeHeader(header);
+    if (key && !headerMap.has(key)) {
+      headerMap.set(key, index);
+    }
+  });
+
+  return rows
+    .slice(headerIndex + 1)
+    .map((row) => ({
+      diasAtraso: pickExcelValue(row, headerMap, ["DIAS DE ATRASO"]),
+      fechaEntradaCorreo: pickExcelValue(row, headerMap, ["FECHA DE ENTRADA CORREO"]),
+      fechaEntrega: pickExcelValue(row, headerMap, ["FECHA DE ENTREGA"]),
+      tramite: pickExcelValue(row, headerMap, ["TRAMITE"]),
+      estado: pickExcelValue(row, headerMap, ["ESTADO"]),
+      cliente: pickExcelValue(row, headerMap, ["CLIENTE", "ASEGURADO"]),
+      poliza: pickExcelValue(row, headerMap, ["POLIZA", "NUMERO DE POLIZA", "NUMERO POLIZA"]),
+      aseguradora: pickExcelValue(row, headerMap, ["ASEGURADORA", "COMPANIA"]),
+      descripcion: pickExcelValue(row, headerMap, ["DESCRIPCION", "DESCRIPCION ", "PENDIENTE"]),
+      folio: pickExcelValue(row, headerMap, ["FOLIO", "OT"]),
+      comentarios: pickExcelValue(row, headerMap, ["COMENTARIOS"]),
+      fechaSalida: pickExcelValue(row, headerMap, ["FECHA DE SALIDA"]),
+      responsable: pickExcelValue(row, headerMap, ["RESPONSABLE", "ASESOR", "AGENTE SEGUIMIENTO"]),
+    }))
+    .filter((entry) => entry.folio || entry.poliza || entry.cliente);
+}
+
+function findExistingBitacoraEntry(entry) {
+  const database = initDatabase();
+  const folio = normalizeText(entry.folio);
+  const polizaKey = normalizePolicyKey(entry.poliza);
+  if (folio) {
+    const found = database
+      .prepare("SELECT * FROM bitacora WHERE archived_at IS NULL OR archived_at = ''")
+      .all()
+      .find((row) => normalizeText(row.folio) === folio);
+    if (found) return dbRowToBitacora(found);
+  }
+  if (polizaKey) {
+    const found = database
+      .prepare("SELECT * FROM bitacora WHERE archived_at IS NULL OR archived_at = ''")
+      .all()
+      .find((row) => normalizePolicyKey(row.poliza) === polizaKey);
+    if (found) return dbRowToBitacora(found);
+  }
+  return null;
+}
+
+function buildAuditMeta(input = {}, fallbackReason = "") {
+  return {
+    reason: normalizeText(input.reason || input.changeReason || fallbackReason),
+    changedBy: normalizeText(input.changedBy || input.operator || "Operador local"),
+  };
+}
+
+function buildAuditMetaFromRequest(req, fallbackReason = "") {
+  return buildAuditMeta(
+    {
+      ...(req.body && !Buffer.isBuffer(req.body) ? req.body : {}),
+      reason: req.body?.reason || req.body?.changeReason || req.get("x-change-reason") || fallbackReason,
+      changedBy: req.body?.changedBy || req.body?.operator || req.get("x-operator") || "Operador local",
+    },
+    fallbackReason
+  );
+}
+
+function requireAuditReason(req, res) {
+  const reason = normalizeText(req.body?.reason || req.body?.changeReason);
+  if (!reason) {
+    res.status(400).json({
+      ok: false,
+      message: "Captura el motivo del cambio para guardar el historial.",
+    });
+    return null;
+  }
+  return buildAuditMeta(req.body);
+}
+
+function importBitacoraEntries(entries, audit = buildAuditMeta({}, "Importacion desde Excel")) {
+  const stats = { imported: entries.length, inserted: 0, updated: 0 };
+  const database = initDatabase();
+  const save = database.transaction((items) => {
+    for (const item of items) {
+      const previous = findExistingBitacoraEntry(item);
+      if (previous) {
+        updateBitacoraEntry(sanitizeBitacoraEntry(item, previous), previous, "import", audit);
+        stats.updated += 1;
+      } else {
+        insertBitacoraEntry(sanitizeBitacoraEntry(item), "import", audit);
+        stats.inserted += 1;
+      }
+    }
+  });
+  save(entries);
+  return stats;
+}
+
+function recordBitacoraHistory(database, entryId, version, action, beforeEntry, afterEntry, audit = {}) {
+  database
+    .prepare(`
+      INSERT INTO bitacora_history (
+        entry_id, version, action, changed_at, changed_by, reason, before_json, after_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(
+      entryId,
+      version,
+      action,
+      nowIso(),
+      normalizeText(audit.changedBy || "Sistema"),
+      normalizeText(audit.reason),
+      beforeEntry ? JSON.stringify(beforeEntry) : null,
+      afterEntry ? JSON.stringify(afterEntry) : null
+    );
+}
+
+function readBitacoraHistory(entryId) {
+  return initDatabase()
+    .prepare("SELECT * FROM bitacora_history WHERE entry_id = ? ORDER BY version DESC, changed_at DESC")
+    .all(entryId)
+    .map((row) => ({
+      id: row.id,
+      entryId: row.entry_id,
+      version: Number(row.version || 1),
+      action: row.action,
+      changedAt: row.changed_at,
+      changedBy: row.changed_by || "",
+      reason: row.reason || "",
+      before: row.before_json ? JSON.parse(row.before_json) : null,
+      after: row.after_json ? JSON.parse(row.after_json) : null,
+    }));
+}
+
+function attachBitacoraHistoryMeta(items) {
+  if (!items.length) {
+    return items;
+  }
+  const database = initDatabase();
+  const countHistory = database.prepare("SELECT COUNT(*) AS total FROM bitacora_history WHERE entry_id = ?");
+  return items.map((item) => ({
+    ...item,
+    historyCount: countHistory.get(item.id).total,
+  }));
+}
+
+function insertBitacoraEntry(entry, action = "create", audit = buildAuditMeta({}, "Captura inicial")) {
+  const database = initDatabase();
+  const insert = database.transaction((item) => {
+    database
+    .prepare(`
+      INSERT INTO bitacora (
+        id, dias_atraso, fecha_entrada_correo, fecha_entrega, tramite, estado, cliente,
+        poliza, aseguradora, descripcion, folio, comentarios, fecha_salida, responsable,
+        version, archived_at, archived_reason, created_at, updated_at
+      ) VALUES (
+        @id, @diasAtraso, @fechaEntradaCorreo, @fechaEntrega, @tramite, @estado, @cliente,
+        @poliza, @aseguradora, @descripcion, @folio, @comentarios, @fechaSalida, @responsable,
+        @version, @archivedAt, @archivedReason, @createdAt, @updatedAt
+      )
+    `)
+      .run(item);
+    recordBitacoraHistory(database, item.id, item.version, action, null, item, audit);
+  });
+  insert(entry);
+}
+
+function updateBitacoraEntry(entry, previous = null, action = "update", audit = {}) {
+  const database = initDatabase();
+  const before =
+    previous ||
+    dbRowToBitacora(database.prepare("SELECT * FROM bitacora WHERE id = ?").get(entry.id) || {});
+  const next = {
+    ...entry,
+    version: Number(before.version || 1) + 1,
+    updatedAt: nowIso(),
+  };
+  const update = database.transaction((item) => {
+    const result = database
+    .prepare(`
+      UPDATE bitacora SET
+        dias_atraso = @diasAtraso,
+        fecha_entrada_correo = @fechaEntradaCorreo,
+        fecha_entrega = @fechaEntrega,
+        tramite = @tramite,
+        estado = @estado,
+        cliente = @cliente,
+        poliza = @poliza,
+        aseguradora = @aseguradora,
+        descripcion = @descripcion,
+        folio = @folio,
+        comentarios = @comentarios,
+        fecha_salida = @fechaSalida,
+        responsable = @responsable,
+        version = @version,
+        archived_at = @archivedAt,
+        archived_reason = @archivedReason,
+        updated_at = @updatedAt
+      WHERE id = @id
+    `)
+      .run(item);
+    if (result.changes) {
+      recordBitacoraHistory(database, item.id, item.version, action, before, item, audit);
+    }
+    return result;
+  });
+  return update(next);
+}
+
+function archiveBitacoraEntry(id, audit = buildAuditMeta({}, "Archivado desde UI")) {
+  const database = initDatabase();
+  const current = database.prepare("SELECT * FROM bitacora WHERE id = ?").get(id);
+  if (!current) {
+    return { changes: 0 };
+  }
+
+  const previous = dbRowToBitacora(current);
+  if (previous.archivedAt) {
+    return { changes: 0 };
+  }
+
+  return updateBitacoraEntry(
+    {
+      ...previous,
+      archivedAt: nowIso(),
+      archivedReason: normalizeText(audit.reason || "Archivado desde UI"),
+    },
+    previous,
+    "archive",
+    audit
+  );
+}
+
+function restoreBitacoraEntry(id, audit = buildAuditMeta({}, "Restaurado desde UI")) {
+  const database = initDatabase();
+  const current = database.prepare("SELECT * FROM bitacora WHERE id = ?").get(id);
+  if (!current) {
+    return { changes: 0 };
+  }
+
+  const previous = dbRowToBitacora(current);
+  if (!previous.archivedAt) {
+    return { changes: 0 };
+  }
+
+  return updateBitacoraEntry(
+    {
+      ...previous,
+      archivedAt: null,
+      archivedReason: "",
+    },
+    previous,
+    "restore",
+    audit
+  );
+}
+
+function isClosedStatus(value) {
+  const status = normalizeLoose(value);
+  return ["terminada", "cancelada", "rechazada", "cerrada", "finalizada"].some((item) =>
+    status.includes(item)
+  );
+}
+
+function startOfDay(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function dayDiffFromToday(value) {
+  const parsed = parseGnpDate(value);
+  if (!parsed) {
+    return null;
+  }
+  return Math.round((startOfDay(parsed).getTime() - startOfDay().getTime()) / 86400000);
+}
+
+function buildMonitorIndexes(rows) {
+  const byOt = new Map();
+  const byPolicy = new Map();
+
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const otKey = normalizeTrackingKey(row.ot);
+    const policyKey = normalizePolicyKey(row.poliza);
+    if (otKey && !byOt.has(otKey)) {
+      byOt.set(otKey, row);
+    }
+    if (policyKey && !byPolicy.has(policyKey)) {
+      byPolicy.set(policyKey, row);
+    }
+  }
+
+  return { byOt, byPolicy };
+}
+
+function findMonitorMatch(entry, indexes) {
+  const folioKey = normalizeTrackingKey(entry.folio);
+  const policyKey = normalizePolicyKey(entry.poliza);
+
+  if (folioKey && indexes.byOt.has(folioKey)) {
+    return { row: indexes.byOt.get(folioKey), matchBy: "folio" };
+  }
+  if (policyKey && indexes.byPolicy.has(policyKey)) {
+    return { row: indexes.byPolicy.get(policyKey), matchBy: "poliza" };
+  }
+
+  return { row: null, matchBy: null };
+}
+
+function classifyBitacoraEntry(entry, monitorRow) {
+  if (!monitorRow) {
+    return {
+      key: "sin_monitor",
+      label: "Sin OT en monitor",
+      severity: "warning",
+    };
+  }
+
+  const manualClosed = isClosedStatus(entry.estado);
+  const monitorClosed = isClosedStatus(monitorRow.estatus);
+  const dueDays = dayDiffFromToday(entry.fechaEntrega || monitorRow.fechaCompromiso);
+
+  if (manualClosed !== monitorClosed) {
+    return {
+      key: "inconsistente",
+      label: "Estado inconsistente",
+      severity: "danger",
+    };
+  }
+  if (!manualClosed && dueDays !== null && dueDays < 0) {
+    return {
+      key: "vencida",
+      label: `${Math.abs(dueDays)} dias vencida`,
+      severity: "danger",
+    };
+  }
+  if (!normalizeText(entry.responsable)) {
+    return {
+      key: "sin_responsable",
+      label: "Sin responsable",
+      severity: "warning",
+    };
+  }
+  if (monitorClosed) {
+    return {
+      key: "cerrada",
+      label: "Cerrada",
+      severity: "ok",
+    };
+  }
+
+  return {
+    key: "al_corriente",
+    label: "Al corriente",
+    severity: "ok",
+  };
+}
+
+function buildBitacoraComparison(entries, monitorRows) {
+  const indexes = buildMonitorIndexes(monitorRows);
+  const matchedOts = new Set();
+
+  const activeEntries = (Array.isArray(entries) ? entries : []).filter((entry) => !entry.archivedAt);
+  const items = attachBitacoraHistoryMeta(activeEntries.map((entry) => {
+    const match = findMonitorMatch(entry, indexes);
+    if (match.row && match.row.ot) {
+      matchedOts.add(normalizeTrackingKey(match.row.ot));
+    }
+    const seguimiento = classifyBitacoraEntry(entry, match.row);
+    const dueDays = dayDiffFromToday(entry.fechaEntrega || match.row?.fechaCompromiso);
+    return {
+      ...entry,
+      matchBy: match.matchBy,
+      monitor: match.row
+        ? {
+            ot: match.row.ot,
+            estatus: match.row.estatus,
+            poliza: match.row.poliza,
+            agente: match.row.agente,
+            contratante: match.row.contratante,
+            tipoSolicitud: match.row.tipoSolicitud,
+            fechaCompromiso: match.row.fechaCompromiso,
+          }
+        : null,
+      seguimiento,
+      diasParaEntrega: dueDays,
+    };
+  }));
+
+  const sinBitacora = (Array.isArray(monitorRows) ? monitorRows : [])
+    .filter((row) => {
+      if (isClosedStatus(row.estatus)) {
+        return false;
+      }
+      const key = normalizeTrackingKey(row.ot);
+      return key && !matchedOts.has(key);
+    })
+    .map((row) => ({
+      ot: row.ot,
+      estatus: row.estatus,
+      poliza: row.poliza,
+      agente: row.agente,
+      contratante: row.contratante,
+      fechaCompromiso: row.fechaCompromiso,
+    }));
+
+  const counts = items.reduce(
+    (acc, item) => {
+      acc.total += 1;
+      acc[item.seguimiento.key] = (acc[item.seguimiento.key] || 0) + 1;
+      return acc;
+    },
+    { total: 0 }
+  );
+  counts.sin_bitacora = sinBitacora.length;
+
+  const alerts = [
+    ...items
+      .filter((item) => ["inconsistente", "vencida", "sin_monitor", "sin_responsable"].includes(item.seguimiento.key))
+      .map((item) => ({
+        type: item.seguimiento.key,
+        severity: item.seguimiento.severity,
+        title: item.seguimiento.label,
+        message: `${item.folio || item.poliza || item.cliente || "Registro"} - ${item.cliente || "Sin cliente"}`,
+        entryId: item.id,
+      })),
+    ...sinBitacora.slice(0, 20).map((row) => ({
+      type: "sin_bitacora",
+      severity: "warning",
+      title: "OT sin bitacora",
+      message: `${row.ot} - ${row.contratante || row.poliza || "Sin referencia"}`,
+      ot: row.ot,
+    })),
+  ];
+
+  return {
+    items,
+    archived: attachBitacoraHistoryMeta(readBitacora({ onlyArchived: true })),
+    sinBitacora,
+    alerts,
+    summary: counts,
+    updatedAt: nowIso(),
+  };
+}
+
+function excelCell(value) {
+  const text = normalizeText(value);
+  return `<Cell><Data ss:Type="String">${escapeXml(text)}</Data></Cell>`;
+}
+
+function escapeXml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function excelRow(values) {
+  return `<Row>${values.map(excelCell).join("")}</Row>`;
+}
+
+function excelSheet(name, headers, rows) {
+  const headerRow = excelRow(headers);
+  const dataRows = rows.map((row) => excelRow(row)).join("");
+  return `<Worksheet ss:Name="${escapeXml(name).slice(0, 31)}"><Table>${headerRow}${dataRows}</Table></Worksheet>`;
+}
+
+function writeBitacoraExcel(comparison) {
+  const report = comparison || buildBitacoraComparison(readBitacora(), runtime.data);
+  const generatedAt = nowIso();
+
+  const bitacoraHeaders = [
+    "Generado",
+    "Seguimiento",
+    "Folio / OT manual",
+    "OT monitor",
+    "Coincidencia",
+    "Poliza manual",
+    "Poliza monitor",
+    "Cliente manual",
+    "Contratante monitor",
+    "Tramite",
+    "Estado manual",
+    "Estatus monitor",
+    "Responsable",
+    "Version",
+    "Agente monitor",
+    "Fecha entrada correo",
+    "Fecha entrega manual",
+    "Fecha compromiso monitor",
+    "Fecha salida",
+    "Aseguradora",
+    "Descripcion",
+    "Comentarios",
+    "Archivado",
+    "Motivo archivo",
+    "Actualizado",
+  ];
+
+  const bitacoraRows = report.items.map((item) => [
+    generatedAt,
+    item.seguimiento?.label,
+    item.folio,
+    item.monitor?.ot,
+    item.matchBy || "sin coincidencia",
+    item.poliza,
+    item.monitor?.poliza,
+    item.cliente,
+    item.monitor?.contratante,
+    item.tramite,
+    item.estado,
+    item.monitor?.estatus,
+    item.responsable,
+    item.version,
+    item.monitor?.agente,
+    item.fechaEntradaCorreo,
+    item.fechaEntrega,
+    item.monitor?.fechaCompromiso,
+    item.fechaSalida,
+    item.aseguradora,
+    item.descripcion,
+    item.comentarios,
+    item.archivedAt,
+    item.archivedReason,
+    item.updatedAt,
+  ]);
+
+  const sinBitacoraHeaders = ["Generado", "OT", "Estatus", "Poliza", "Agente", "Contratante", "Fecha compromiso"];
+  const sinBitacoraRows = report.sinBitacora.map((row) => [
+    generatedAt,
+    row.ot,
+    row.estatus,
+    row.poliza,
+    row.agente,
+    row.contratante,
+    row.fechaCompromiso,
+  ]);
+
+  const alertHeaders = ["Generado", "Tipo", "Severidad", "Titulo", "Detalle", "OT", "Registro bitacora"];
+  const alertRows = report.alerts.map((alert) => [
+    generatedAt,
+    alert.type,
+    alert.severity,
+    alert.title,
+    alert.message,
+    alert.ot,
+    alert.entryId,
+  ]);
+
+  const historyHeaders = [
+    "Fecha",
+    "Registro",
+    "Version",
+    "Accion",
+    "Operador",
+    "Motivo",
+    "Folio / OT",
+    "Poliza",
+    "Cliente",
+    "Estado",
+    "Responsable",
+    "Comentarios",
+  ];
+  const historyRows = initDatabase()
+    .prepare("SELECT * FROM bitacora_history ORDER BY changed_at DESC, id DESC")
+    .all()
+    .map((row) => {
+      const after = row.after_json ? JSON.parse(row.after_json) : {};
+      const before = row.before_json ? JSON.parse(row.before_json) : {};
+      const snapshot = Object.keys(after).length ? after : before;
+      return [
+        row.changed_at,
+        row.entry_id,
+        row.version,
+        row.action,
+        row.changed_by,
+        row.reason,
+        snapshot.folio,
+        snapshot.poliza,
+        snapshot.cliente,
+        snapshot.estado,
+        snapshot.responsable,
+        snapshot.comentarios,
+      ];
+    });
+
+  const xml = [
+    '<?xml version="1.0"?>',
+    '<?mso-application progid="Excel.Sheet"?>',
+    '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">',
+    excelSheet("Bitacora", bitacoraHeaders, bitacoraRows),
+    excelSheet("Sin bitacora", sinBitacoraHeaders, sinBitacoraRows),
+    excelSheet("Alertas", alertHeaders, alertRows),
+    excelSheet("Historial", historyHeaders, historyRows),
+    "</Workbook>",
+  ].join("");
+
+  fs.writeFileSync(CONFIG.bitacoraExcelFile, xml, "utf8");
+  return CONFIG.bitacoraExcelFile;
+}
+
+function saveMonitorSnapshot(result, currentRows, diff) {
+  if (!db) {
+    return null;
+  }
+
+  const snapshotId = diff?.timestamp || nowIso();
+  const save = db.transaction(() => {
+    db.prepare(`
+      INSERT OR REPLACE INTO monitor_snapshots (
+        id, captured_at, source, total, diff_json, raw_json, debug_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      snapshotId,
+      snapshotId,
+      result?.debug?.source || "",
+      Array.isArray(currentRows) ? currentRows.length : 0,
+      JSON.stringify(diff || null),
+      JSON.stringify(result?.raw || null),
+      JSON.stringify(result?.debug || null)
+    );
+
+    db.prepare("DELETE FROM monitor_rows WHERE snapshot_id = ?").run(snapshotId);
+    const insertRow = db.prepare(`
+      INSERT OR REPLACE INTO monitor_rows (
+        snapshot_id, ot, usuario_creador, estatus, poliza, agente, contratante,
+        tipo_solicitud, producto, fecha_compromiso, fecha_registro, primer_ingreso,
+        ultimo_ingreso, guia, medio_apertura, rol, row_json
+      ) VALUES (
+        @snapshotId, @ot, @usuarioCreador, @estatus, @poliza, @agente, @contratante,
+        @tipoSolicitud, @producto, @fechaCompromiso, @fechaRegistro, @primerIngreso,
+        @ultimoIngreso, @guia, @medioApertura, @rol, @rowJson
+      )
+    `);
+
+    for (const row of Array.isArray(currentRows) ? currentRows : []) {
+      insertRow.run({
+        snapshotId,
+        ot: normalizeText(row.ot),
+        usuarioCreador: normalizeText(row.usuarioCreador),
+        estatus: normalizeText(row.estatus),
+        poliza: normalizeText(row.poliza),
+        agente: normalizeText(row.agente),
+        contratante: normalizeText(row.contratante),
+        tipoSolicitud: normalizeText(row.tipoSolicitud),
+        producto: normalizeText(row.producto),
+        fechaCompromiso: normalizeText(row.fechaCompromiso),
+        fechaRegistro: normalizeText(row.fechaRegistro),
+        primerIngreso: normalizeText(row.primerIngreso),
+        ultimoIngreso: normalizeText(row.ultimoIngreso),
+        guia: normalizeText(row.guia),
+        medioApertura: normalizeText(row.medioApertura),
+        rol: normalizeText(row.rol),
+        rowJson: JSON.stringify(row),
+      });
+    }
+  });
+
+  save();
+  return snapshotId;
+}
+
+function saveComparisonHistory(comparison, snapshotId = null) {
+  if (!db || !comparison) {
+    return null;
+  }
+
+  const generatedAt = comparison.updatedAt || nowIso();
+  const save = db.transaction(() => {
+    const info = db.prepare(`
+      INSERT INTO bitacora_comparativas (snapshot_id, generated_at, summary_json)
+      VALUES (?, ?, ?)
+    `).run(snapshotId, generatedAt, JSON.stringify(comparison.summary || {}));
+
+    const insertAlert = db.prepare(`
+      INSERT INTO alertas (
+        comparison_id, type, severity, title, message, ot, entry_id, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    for (const alert of comparison.alerts || []) {
+      insertAlert.run(
+        info.lastInsertRowid,
+        alert.type || "",
+        alert.severity || "",
+        alert.title || "",
+        alert.message || "",
+        alert.ot || "",
+        alert.entryId || "",
+        generatedAt
+      );
+    }
+
+    return info.lastInsertRowid;
+  });
+
+  return save();
+}
+
+function seedDatabaseFromCurrentState() {
+  if (!db || !Array.isArray(runtime.data) || !runtime.data.length) {
+    return;
+  }
+
+  const snapshotId = runtime.dataVersion || runtime.lastUpdate || "initial";
+  const exists = db.prepare("SELECT 1 FROM monitor_snapshots WHERE id = ?").get(snapshotId);
+  if (exists) {
+    return;
+  }
+
+  const result = {
+    raw: readJsonSafe(CONFIG.rawFile, null),
+    debug: readJsonSafe(CONFIG.debugCapturedFile, { source: "estado-actual" }),
+  };
+  saveMonitorSnapshot(result, runtime.data, runtime.diff);
+  saveComparisonHistory(buildBitacoraComparison(readBitacora(), runtime.data), snapshotId);
+}
+
 function previewToken(token) {
   const clean = normalizeText(token);
   if (!clean) {
@@ -500,18 +1586,30 @@ function isCurrentMonthRow(row, today = new Date()) {
   return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth();
 }
 
-function shouldKeepRowForCurrentView(row, today = new Date()) {
-  return isCurrentMonthRow(row, today) || !isTerminada(row);
+function getReferenceMonth(rows, fallback = new Date()) {
+  const dates = (Array.isArray(rows) ? rows : [])
+    .map((row) => parseGnpDate(row?.fechaCompromiso))
+    .filter((date) => date && !Number.isNaN(date.getTime()));
+
+  if (!dates.length) {
+    return fallback;
+  }
+
+  return dates.reduce((latest, date) => (date.getTime() > latest.getTime() ? date : latest), dates[0]);
+}
+
+function shouldKeepRowForCurrentView(row, referenceDate = new Date()) {
+  return isCurrentMonthRow(row, referenceDate) || !isTerminada(row);
 }
 
 function mergeCurrentMonthWithOpenOlderRows(currentMonthRows, normalRows) {
-  const today = new Date();
-  const merged = currentMonthRows.filter((row) => shouldKeepRowForCurrentView(row, today));
+  const referenceDate = getReferenceMonth(currentMonthRows);
+  const merged = currentMonthRows.filter((row) => shouldKeepRowForCurrentView(row, referenceDate));
   const currentKeys = new Set(merged.map(makeKey).filter(Boolean));
 
   for (const row of normalRows) {
     const key = makeKey(row);
-    if (!key || currentKeys.has(key) || !shouldKeepRowForCurrentView(row, today)) {
+    if (!key || currentKeys.has(key) || !shouldKeepRowForCurrentView(row, referenceDate)) {
       continue;
     }
 
@@ -767,6 +1865,84 @@ function isLocalHost(host) {
   return ["127.0.0.1", "localhost", "::1"].includes(value);
 }
 
+function normalizeIpAddress(value) {
+  let ip = String(value || "").trim();
+  if (!ip) return "";
+  if (ip.startsWith("::ffff:")) {
+    ip = ip.slice(7);
+  }
+  if (ip === "::1") {
+    return "127.0.0.1";
+  }
+  return ip;
+}
+
+function getClientIp(req) {
+  return normalizeIpAddress(req.ip || req.socket?.remoteAddress || "");
+}
+
+function ipv4ToInt(value) {
+  const parts = String(value || "").split(".");
+  if (parts.length !== 4) return null;
+  const bytes = parts.map((part) => Number(part));
+  if (bytes.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return null;
+  return bytes.reduce((acc, part) => (acc << 8) + part, 0) >>> 0;
+}
+
+function matchesIpRule(clientIp, rule) {
+  const normalizedRule = normalizeIpAddress(rule);
+  if (!normalizedRule) return false;
+  if (!normalizedRule.includes("/")) {
+    return clientIp === normalizedRule;
+  }
+
+  const [baseIp, prefixText] = normalizedRule.split("/");
+  const prefix = Number(prefixText);
+  const client = ipv4ToInt(clientIp);
+  const base = ipv4ToInt(baseIp);
+  if (client === null || base === null || !Number.isInteger(prefix) || prefix < 0 || prefix > 32) {
+    return false;
+  }
+  const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+  return (client & mask) === (base & mask);
+}
+
+function getAllowedIpRules() {
+  return [
+    "127.0.0.1",
+    ...CONFIG.allowedIps,
+  ].filter(Boolean);
+}
+
+function requireAllowedIp(req, res, next) {
+  const allowedIps = getAllowedIpRules();
+  const clientIp = getClientIp(req);
+
+  if (!CONFIG.allowedIps.length || allowedIps.some((rule) => matchesIpRule(clientIp, rule))) {
+    next();
+    return;
+  }
+
+  pushLog("security", "Solicitud bloqueada por lista blanca de IP.", {
+    ip: clientIp,
+    path: req.path,
+  });
+
+  res.status(403).json({
+    ok: false,
+    message: "Acceso no permitido desde esta IP.",
+  });
+}
+
+function applySecurityHeaders(_req, res, next) {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "same-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.setHeader("Cache-Control", "no-store");
+  next();
+}
+
 function hasValidMonitorToken(req) {
   if (!CONFIG.monitorToken) {
     return true;
@@ -791,6 +1967,15 @@ function requireMonitorToken(req, res, next) {
   });
 }
 
+app.use(applySecurityHeaders);
+app.use(requireAllowedIp);
+app.use("/api/bitacora/import-excel", express.raw({
+  type: "application/octet-stream",
+  limit: "25mb",
+}));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.static(path.join(__dirname, "public")));
+
 function validateConfig() {
   const warnings = [];
 
@@ -811,6 +1996,12 @@ function validateConfig() {
   }
   if (!CONFIG.monitorToken && !isLocalHost(CONFIG.host)) {
     warnings.push("MONITOR_TOKEN no esta configurado y HOST permite acceso fuera de localhost.");
+  }
+  if (!CONFIG.allowedIps.length && !isLocalHost(CONFIG.host)) {
+    warnings.push("ALLOWED_IPS no esta configurado y HOST permite acceso fuera de localhost.");
+  }
+  if (CONFIG.trustProxy && !CONFIG.allowedIps.length) {
+    warnings.push("TRUST_PROXY esta activo, pero ALLOWED_IPS no esta configurado.");
   }
 
   runtime.validationWarnings = warnings;
@@ -3393,6 +4584,10 @@ function persistRunData(result, currentRows, diff) {
   writeJson(CONFIG.extractedFile, currentRows);
   writeJson(CONFIG.debugCapturedFile, result.debug);
   writeJson(CONFIG.debugRequestsFile, result.requests || []);
+  const comparison = buildBitacoraComparison(readBitacora(), currentRows);
+  const snapshotId = saveMonitorSnapshot(result, currentRows, diff);
+  saveComparisonHistory(comparison, snapshotId);
+  writeBitacoraExcel(comparison);
 }
 
 async function waitForCapturedRows(capture, page, timeout = 12000) {
@@ -3452,6 +4647,31 @@ async function fetchCurrentRows(page, context) {
       pushLog("capture", "Primera consulta sin resultados, continuando con ajuste de fecha.", {
         error: serializeError(error),
       });
+    }
+
+    if (!normalQueryResult) {
+      const scrapedNormalRows = await scrapeTableRows(page).catch(() => []);
+      if (scrapedNormalRows.length) {
+        normalQueryResult = {
+          rows: scrapedNormalRows,
+          raw: {
+            source: "scraping-initial",
+            capturedAt: nowIso(),
+            rows: scrapedNormalRows,
+          },
+          requests: capture.captured.requests || [],
+          debug: {
+            source: "scraping-initial",
+            capturedAt: nowIso(),
+            getPendientesUrl: capture.captured.getPendientesUrl,
+            responseStatus: capture.captured.responseStatus,
+            finalUrl: page.url(),
+          },
+        };
+        pushLog("query", "Primera consulta recuperada por scraping visible antes de ajustar fechas.", {
+          total: scrapedNormalRows.length,
+        });
+      }
     }
 
     // Ajustar fechas al mes actual y realizar segunda consulta.
@@ -3799,6 +5019,7 @@ function buildStatusPayload(includeData) {
       ? runtime.diff.summary
       : createEmptyDiff(runtime.data.length).summary;
   const dateRange = getDefaultDateRange();
+  const bitacora = buildBitacoraComparison(readBitacora(), runtime.data);
 
   return {
     busy: runtime.busy,
@@ -3810,6 +5031,7 @@ function buildStatusPayload(includeData) {
     summary,
     data: includeData ? runtime.data : null,
     diff: includeData ? runtime.diff : null,
+    bitacora,
     executionLog: runtime.executionLog,
     sessionInfo: publicSessionInfo(runtime.sessionInfo),
     manualLogin: runtime.manualLogin,
@@ -3870,15 +5092,187 @@ function buildHealthPayload() {
   };
 }
 
-app.get("/api/status", (req, res) => {
+app.get("/api/status", requireMonitorToken, (req, res) => {
   const since = typeof req.query.since === "string" ? req.query.since : "";
-  const includeData = !since || since !== runtime.dataVersion;
+  const forceFull = req.query.full === "1" || req.query.full === "true";
+  const includeData = forceFull || !since || since !== runtime.dataVersion;
   res.json(buildStatusPayload(includeData));
 });
 
 app.get("/api/health", (_req, res) => {
   const payload = buildHealthPayload();
   res.status(payload.ok ? 200 : 503).json(payload);
+});
+
+app.get("/api/bitacora", requireMonitorToken, (_req, res) => {
+  res.json({
+    ...buildBitacoraComparison(readBitacora(), runtime.data),
+    db: countBitacoraRecords(),
+  });
+});
+
+app.get("/api/bitacora/:id/history", requireMonitorToken, (_req, res) => {
+  const current = initDatabase()
+    .prepare("SELECT * FROM bitacora WHERE id = ?")
+    .get(_req.params.id);
+  if (!current) {
+    res.json({
+      ok: true,
+      current: null,
+      history: [],
+    });
+    return;
+  }
+
+  res.json({
+    ok: true,
+    current: dbRowToBitacora(current),
+    history: readBitacoraHistory(_req.params.id),
+  });
+});
+
+app.get("/api/bitacora/excel", requireMonitorToken, (_req, res) => {
+  const file = writeBitacoraExcel(buildBitacoraComparison(readBitacora(), runtime.data));
+  res.download(file, "bitacora-seguimiento.xls");
+});
+
+app.post("/api/bitacora/import-excel", requireMonitorToken, (req, res) => {
+  if (!Buffer.isBuffer(req.body) || !req.body.length) {
+    res.status(400).json({ ok: false, message: "Archivo Excel vacio o no recibido." });
+    return;
+  }
+
+  const entries = parseBitacoraExcel(req.body);
+  if (!entries.length) {
+    res.status(400).json({
+      ok: false,
+      message: "No encontre columnas validas para importar la bitacora.",
+    });
+    return;
+  }
+
+  const stats = importBitacoraEntries(entries, buildAuditMetaFromRequest(req, "Importacion desde Excel"));
+  const comparison = buildBitacoraComparison(readBitacora(), runtime.data);
+  saveComparisonHistory(comparison);
+  writeBitacoraExcel(comparison);
+  pushLog("bitacora", "Bitacora importada desde Excel.", stats);
+  res.json({ ...comparison, import: stats });
+});
+
+app.post("/api/bitacora", requireMonitorToken, (req, res) => {
+  const entry = sanitizeBitacoraEntry(req.body || {});
+  const audit = buildAuditMeta(req.body || {}, "Captura inicial");
+  if (!entry.folio && !entry.poliza) {
+    res.status(400).json({
+      ok: false,
+      message: "Captura folio/OT o poliza para guardar la bitacora.",
+    });
+    return;
+  }
+
+  const beforeCounts = countBitacoraRecords();
+  const existing = findExistingBitacoraEntry(entry);
+  let savedEntry = entry;
+  let action = "created";
+
+  if (existing) {
+    savedEntry = sanitizeBitacoraEntry(entry, existing);
+    updateBitacoraEntry(savedEntry, existing, "update", {
+      ...audit,
+      reason: audit.reason || "Actualizacion de registro existente",
+    });
+    action = "updated_existing";
+  } else {
+    insertBitacoraEntry(entry, "create", audit);
+  }
+
+  const afterCounts = countBitacoraRecords();
+  const items = readBitacora();
+  const comparison = buildBitacoraComparison(items, runtime.data);
+  saveComparisonHistory(comparison);
+  writeBitacoraExcel(comparison);
+  pushLog("bitacora", action === "created" ? "Registro agregado a bitacora." : "Registro existente actualizado en bitacora.", {
+    id: existing?.id || entry.id,
+    action,
+    folio: savedEntry.folio,
+    poliza: savedEntry.poliza,
+    responsable: savedEntry.responsable,
+    beforeActive: beforeCounts.active,
+    afterActive: afterCounts.active,
+  });
+  res.status(action === "created" ? 201 : 200).json({
+    ...comparison,
+    db: afterCounts,
+    save: {
+      action,
+      duplicate: Boolean(existing),
+      id: existing?.id || entry.id,
+      folio: savedEntry.folio,
+      poliza: savedEntry.poliza,
+      before: beforeCounts,
+      after: afterCounts,
+    },
+  });
+});
+
+app.put("/api/bitacora/:id", requireMonitorToken, (req, res) => {
+  const audit = requireAuditReason(req, res);
+  if (!audit) return;
+
+  const current = initDatabase()
+    .prepare("SELECT * FROM bitacora WHERE id = ?")
+    .get(req.params.id);
+  if (!current) {
+    res.status(404).json({ ok: false, message: "Registro de bitacora no encontrado." });
+    return;
+  }
+
+  const previous = dbRowToBitacora(current);
+  const entry = sanitizeBitacoraEntry(req.body || {}, previous);
+  updateBitacoraEntry(entry, previous, "update", audit);
+  const items = readBitacora();
+  const comparison = buildBitacoraComparison(items, runtime.data);
+  saveComparisonHistory(comparison);
+  writeBitacoraExcel(comparison);
+  pushLog("bitacora", "Registro actualizado en bitacora.", {
+    id: entry.id,
+    folio: entry.folio,
+  });
+  res.json(comparison);
+});
+
+app.delete("/api/bitacora/:id", requireMonitorToken, (req, res) => {
+  const audit = requireAuditReason(req, res);
+  if (!audit) return;
+
+  const result = archiveBitacoraEntry(req.params.id, audit);
+  if (!result.changes) {
+    res.status(404).json({ ok: false, message: "Registro de bitacora no encontrado." });
+    return;
+  }
+
+  const comparison = buildBitacoraComparison(readBitacora(), runtime.data);
+  saveComparisonHistory(comparison);
+  writeBitacoraExcel(comparison);
+  pushLog("bitacora", "Registro archivado en bitacora.", { id: req.params.id });
+  res.json(comparison);
+});
+
+app.post("/api/bitacora/:id/restore", requireMonitorToken, (req, res) => {
+  const audit = requireAuditReason(req, res);
+  if (!audit) return;
+
+  const result = restoreBitacoraEntry(req.params.id, audit);
+  if (!result.changes) {
+    res.status(404).json({ ok: false, message: "Registro archivado no encontrado." });
+    return;
+  }
+
+  const comparison = buildBitacoraComparison(readBitacora(), runtime.data);
+  saveComparisonHistory(comparison);
+  writeBitacoraExcel(comparison);
+  pushLog("bitacora", "Registro restaurado en bitacora.", { id: req.params.id });
+  res.json(comparison);
 });
 
 app.post("/api/run", requireMonitorToken, (_req, res) => {
@@ -3954,7 +5348,10 @@ function scheduleNextAutoRefresh(delayMs = CONFIG.autoRefreshMinutes * 60 * 1000
 
 function startServer() {
   validateConfig();
+  initDatabase();
+  seedDatabaseFromCurrentState();
   cleanupOldScreenshots();
+  writeBitacoraExcel(buildBitacoraComparison(readBitacora(), runtime.data));
   scheduleNextAutoRefresh();
 
   pushLog("system", "Monitor listo.");
