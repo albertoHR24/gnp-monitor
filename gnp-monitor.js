@@ -34,6 +34,14 @@ function getBrowserChannel() {
   return requested;
 }
 
+function getProfileDir() {
+  const requested = process.env.PROFILE_DIR || "";
+  if (process.platform !== "win32" && (!requested || /^[A-Za-z]:[\\/]/.test(requested))) {
+    return path.join(__dirname, "data", "profile");
+  }
+  return requested || "C:\\Users\\TI\\AppData\\Local\\GNPMonitorProfile";
+}
+
 const CONFIG = {
   port: Number(process.env.PORT || 3000),
   host: process.env.HOST || "127.0.0.1",
@@ -49,9 +57,7 @@ const CONFIG = {
     process.env.CONSULTA_URL ||
     "https://portalintermediarios.gnp.com.mx/home/pagina-iframe?tipo=aplicacion&menu=Todos%20los%20ramos%20Consulta",
   browserChannel: getBrowserChannel(),
-  profileDir:
-    process.env.PROFILE_DIR ||
-    "C:\\Users\\TI\\AppData\\Local\\GNPMonitorProfile",
+  profileDir: getProfileDir(),
   email: process.env.GNP_EMAIL || "",
   password: process.env.GNP_PASSWORD || "",
   workflowName: process.env.WORKFLOW_NAME || "Gastos Medicos Mayores",
