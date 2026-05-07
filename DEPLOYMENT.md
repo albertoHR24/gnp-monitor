@@ -105,3 +105,29 @@ CONSULTA_URL=https://portalintermediarios.gnp.com.mx/home/pagina-iframe?tipo=apl
 ```
 
 Runtime files are written under `data/`, including `monitor.log`, JSON snapshots, and screenshots.
+
+## Railway notes
+
+Railway runs Linux, so Microsoft Edge is not available by default. Use Playwright Chromium instead:
+
+```env
+HOST=0.0.0.0
+HEADLESS=true
+BROWSER_CHANNEL=
+PROFILE_DIR=/app/data/profile
+TRUST_PROXY=true
+ALLOWED_IPS=your.public.ip.here
+MONITOR_TOKEN=use-a-long-random-token
+```
+
+If the deploy reports that Chromium is missing, set the Railway build command to:
+
+```bash
+npm install && npx playwright install chromium
+```
+
+If Chromium starts but reports missing Linux libraries, use a Docker image or build step that runs:
+
+```bash
+npx playwright install --with-deps chromium
+```

@@ -37,7 +37,7 @@ const CONFIG = {
   consultaUrl:
     process.env.CONSULTA_URL ||
     "https://portalintermediarios.gnp.com.mx/home/pagina-iframe?tipo=aplicacion&menu=Todos%20los%20ramos%20Consulta",
-  browserChannel: process.env.BROWSER_CHANNEL || "msedge",
+  browserChannel: process.env.BROWSER_CHANNEL || (process.platform === "win32" ? "msedge" : ""),
   profileDir:
     process.env.PROFILE_DIR ||
     "C:\\Users\\TI\\AppData\\Local\\GNPMonitorProfile",
@@ -2620,16 +2620,21 @@ async function getContext() {
     return runtime.browserContext;
   }
 
-  runtime.browserContext = await chromium.launchPersistentContext(CONFIG.profileDir, {
+  const launchOptions = {
     headless: CONFIG.headless,
-    channel: CONFIG.browserChannel,
     viewport: { width: 1600, height: 900 },
     slowMo: CONFIG.headless ? 0 : 70,
     args: [
       "--disable-session-crashed-bubble",
       "--disable-features=InfiniteSessionRestore,msEdgeRestorePage",
     ],
-  });
+  };
+
+  if (CONFIG.browserChannel) {
+    launchOptions.channel = CONFIG.browserChannel;
+  }
+
+  runtime.browserContext = await chromium.launchPersistentContext(CONFIG.profileDir, launchOptions);
 
   runtime.page = runtime.browserContext.pages()[0] || (await runtime.browserContext.newPage());
   await preparePageForUse(runtime.page);
