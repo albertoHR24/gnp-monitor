@@ -72,7 +72,10 @@
           Actualizar
         </button>
 
-        <button id="manualBtn" class="btn-secondary" type="button" disabled>Login manual</button>
+        <button id="startLoginBtn" class="btn-secondary" type="button">Iniciar login</button>
+        <button id="manualBtn" class="btn-secondary" type="button" disabled>Marcar sesion lista</button>
+        <button id="pauseMonitorBtn" class="btn-secondary" type="button">Pausar</button>
+        <button id="resumeMonitorBtn" class="btn-secondary" type="button" disabled>Reanudar</button>
         <button id="cancelBtn" class="btn-secondary" type="button" disabled>Cancelar</button>
         <button id="restartBrowserBtn" class="btn-ghost" type="button">Reiniciar</button>
       </div>
@@ -91,6 +94,18 @@
         <strong>Login manual requerido</strong>
         <p id="manualReason">El sistema no pudo pasar el acceso automaticamente.</p>
         <ul id="manualSteps"></ul>
+      </div>
+    </section>
+
+    <section id="errorBanner" class="alert-banner danger">
+      <div class="alert-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+      </div>
+      <div class="alert-content">
+        <strong>Ultimo error</strong>
+        <p id="errorText">-</p>
       </div>
     </section>
 
@@ -124,6 +139,10 @@
       <div class="metric-card">
         <span class="metric-label">Proxima consulta</span>
         <span id="nextRunChip" class="metric-value">Desactivada</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Sesion</span>
+        <span id="sessionChip" class="metric-value">No verificada</span>
       </div>
       <div class="metric-card">
         <span class="metric-label">Registros</span>
@@ -281,7 +300,7 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
-            Exportar
+            Exportar Excel
           </a>
           <label class="btn-secondary">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -450,6 +469,9 @@
               <option value="reprocesada">Reprocesada</option>
               <option value="terminada">Terminada</option>
             </select>
+            <button id="toggleHiddenRowsBtn" class="btn-secondary hidden-rows-btn" type="button">
+              Mostrar ocultos
+            </button>
             <button id="refreshBtn" class="icon-btn" type="button" title="Refrescar">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>

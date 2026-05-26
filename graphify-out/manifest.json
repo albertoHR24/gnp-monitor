@@ -1,0 +1,37 @@
+{
+  "C:\\Users\\TI\\Desktop\\Nueva carpeta (5)\\ecosystem.config.js": {
+    "mtime": 1777317172.1951568,
+    "ast_hash": "8d64ae26f452f410bbc9665d8fc4a93f",
+    "semantic_hash": "8d64ae26f452f410bbc9665d8fc4a93f"
+  },
+  "C:\\Users\\TI\\Desktop\\Nueva carpeta (5)\\gnp-monitor.js": {
+    "mtime": 1778266854.6735878,
+    "ast_hash": "cfa735b0535e1f0b4867129a59387000",
+    "semantic_hash": "cfa735b0535e1f0b4867129a59387000"
+  },
+  "C:\\Users\\TI\\Desktop\\Nueva carpeta (5)\\make-installer-exe.ps1": {
+    "mtime": 1777325413.8393257,
+    "ast_hash": "e1d41de5484597509aaca9f0874fcb07",
+    "semantic_hash": "e1d41de5484597509aaca9f0874fcb07"
+  },
+  "C:\\Users\\TI\\Desktop\\Nueva carpeta (5)\\package-windows.ps1": {
+    "mtime": 1777317222.6279917,
+    "ast_hash": "9b831ada2b5227ae1ff1357b8589b1e0",
+    "semantic_hash": "9b831ada2b5227ae1ff1357b8589b1e0"
+  },
+  "C:\\Users\\TI\\Desktop\\Nueva carpeta (5)\\package.json": {
+    "mtime": 1778022466.0220997,
+    "ast_hash": "dc2504e19cbbd289c59d081010fcbff4",
+    "semantic_hash": "dc2504e19cbbd289c59d081010fcbff4"
+  },
+  "C:\\Users\\TI\\Desktop\\Nueva carpeta (5)\\public\\app.js": {
+    "mtime": 1778266896.2792773,
+    "ast_hash": "5fed86044b1581bcca85fee503a1a903",
+    "semantic_hash": "5fed86044b1581bcca85fee503a1a903"
+  },
+  "C:\\Users\\TI\\Desktop\\Nueva carpeta (5)\\tests\\pure.test.js": {
+    "mtime": 1777415190.8811214,
+    "ast_hash": "c33f7e641838949ed10b653eba72fe09",
+    "semantic_hash": "c33f7e641838949ed10b653eba72fe09"
+  }
+}

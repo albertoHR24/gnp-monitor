@@ -858,6 +858,17 @@ body:not(.operator-mode) .tv-controls {
   background: var(--color-bg-card);
 }
 
+.hidden-rows-btn {
+  min-height: 36px;
+  padding: 8px 12px;
+}
+
+.hidden-rows-btn.active {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+  background: var(--color-primary-muted);
+}
+
 /* Loading State */
 .loading-state {
   display: flex;
@@ -1344,6 +1355,16 @@ body:not(.operator-mode) .tv-controls {
   background: var(--color-bg-hover);
 }
 
+.detail-action.primary {
+  border-color: var(--color-primary);
+  background: var(--color-primary-muted);
+  color: var(--color-text);
+}
+
+.detail-action.primary:hover {
+  background: var(--color-primary);
+}
+
 /* ========== BITACORA PANEL ========== */
 .bitacora-panel {
   display: flex;
@@ -1452,6 +1473,18 @@ body.tv-mode .bitacora-panel {
 
 .bitacora-alert.danger {
   border-left-color: var(--color-danger);
+}
+
+.bitacora-alert.clickable {
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.bitacora-alert.clickable:hover,
+.bitacora-alert.clickable:focus {
+  background: rgba(64, 81, 143, 0.72);
+  border-left-color: var(--color-primary);
+  outline: none;
 }
 
 .bitacora-alert strong {
@@ -1609,6 +1642,17 @@ body.tv-mode .bitacora-panel {
   width: 188px;
 }
 
+.bitacora-table td:last-child {
+  position: relative;
+  overflow: visible;
+  z-index: 20;
+}
+
+.bitacora-table tbody tr:hover td:last-child,
+.bitacora-table tbody tr:focus-within td:last-child {
+  z-index: 80;
+}
+
 .bitacora-table th:nth-child(6),
 .bitacora-table td:nth-child(6) {
   width: 150px;
@@ -1634,6 +1678,8 @@ body.tv-mode .bitacora-panel {
 }
 
 .bitacora-mini-btn {
+  position: relative;
+  z-index: 1;
   flex: 0 0 auto;
   min-width: 48px;
   min-height: 30px;
@@ -1657,6 +1703,33 @@ body.tv-mode .bitacora-panel {
 .bitacora-mini-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.floating-tooltip {
+  position: fixed;
+  z-index: 9999;
+  max-width: 240px;
+  padding: 8px 11px;
+  background: #111827;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+}
+
+.floating-tooltip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -11px;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #111827;
 }
 
 .seguimiento-badge {
@@ -1773,6 +1846,20 @@ body.tv-mode .bitacora-panel {
   white-space: nowrap;
 }
 
+.comparison-header {
+  border-left-color: var(--color-info);
+  background: rgba(35, 47, 93, 0.92);
+}
+
+.comparison-header span,
+.comparison-header strong {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
 .comparison-match {
   border-left-color: var(--color-success);
 }
@@ -1813,10 +1900,25 @@ body.tv-mode .bitacora-panel {
 }
 
 .bitacora-history-item {
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  font: inherit;
   padding: 10px 12px;
   background: rgba(53, 69, 127, 0.9);
   border-left: 3px solid var(--color-primary);
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  cursor: pointer;
+}
+
+.bitacora-history-item:hover,
+.bitacora-history-item:focus-visible,
+.bitacora-history-item.active {
+  background: rgba(69, 89, 158, 0.98);
+  outline: 1px solid rgba(124, 155, 255, 0.72);
 }
 
 .bitacora-history-item strong {

@@ -1,5 +1,81 @@
 # GNP Monitor deployment
 
+## Local
+
+La aplicacion usa Node.js, Express, Playwright y SQLite. Sin `DATA_DIR`, todos los archivos persistentes se crean en `./data/`:
+
+```powershell
+npm install
+npm start
+```
+
+Configuracion minima sugerida en `.env`:
+
+```env
+PORT=3000
+HOST=127.0.0.1
+DATA_DIR=
+HEADLESS=false
+BROWSER_CHANNEL=msedge
+AUTO_REFRESH_MINUTES=10
+```
+
+El perfil persistente se guarda por defecto en `data/browser-profile`. Si `DATA_DIR` no esta configurado, se puede usar `PROFILE_DIR` como override para instalaciones locales existentes.
+
+## Docker
+
+El contenedor usa la imagen oficial `mcr.microsoft.com/playwright:v1.50.0-noble` y Chromium incluido en ella:
+
+```bash
+docker build -t gnp-monitor .
+docker run -p 3000:3000 -v gnp-data:/data gnp-monitor
+```
+
+Dentro del contenedor `DATA_DIR=/data`; allí se guardan:
+
+```text
+/data/gnp-monitor.db
+/data/screenshots/
+/data/logs/monitor.log
+/data/browser-profile/
+/data/session.json
+```
+
+Variables habituales para Docker o VPS:
+
+```env
+PORT=3000
+HOST=0.0.0.0
+DATA_DIR=/data
+HEADLESS=true
+BROWSER_CHANNEL=
+AUTO_REFRESH_MINUTES=10
+MONITOR_TOKEN=use-a-long-random-token
+```
+
+En un VPS donde un operador tenga acceso al navegador gráfico, usa `HEADLESS=false` durante el login manual inicial y conserva el volumen `/data` para reutilizar la sesión.
+
+## Railway
+
+`railway.json` configura el build mediante `Dockerfile`, `npm start` y el healthcheck `GET /health`.
+
+1. Crea el servicio desde este repositorio y deja que Railway use el `Dockerfile`.
+2. Agrega un volumen persistente y móntalo en `/data`.
+3. Configura como mínimo `DATA_DIR=/data`, `HOST=0.0.0.0`, `PORT=3000`, `HEADLESS=true` y `BROWSER_CHANNEL=`.
+4. Configura `MONITOR_TOKEN` si la aplicación quedará expuesta; `TRUST_PROXY=true` y `ALLOWED_IPS` sólo cuando la red/proxy permitan esa restricción.
+
+Railway conserva cookies y SQLite mediante el volumen, pero un contenedor headless no ofrece por sí solo una ventana visible para resolver CAPTCHA. Para una sesión que requiera interacción, inicia el perfil desde un entorno con navegador accesible montando el mismo almacenamiento, o despliega en un VPS con escritorio remoto; después el monitor reutiliza `/data/browser-profile`.
+
+## Login asistido
+
+El servidor no termina si GNP solicita login o reCAPTCHA. Marca `requiresManualLogin: true`, conserva el perfil del navegador y expone controles en la interfaz:
+
+- `Iniciar login` prepara la pantalla de acceso.
+- `Marcar sesion lista` valida que el operador ya inició sesión.
+- `Actualizar`, `Pausar` y `Reanudar` operan el monitor.
+
+Los endpoints equivalentes son `GET /api/session/status`, `POST /api/session/start-login`, `POST /api/session/mark-ready`, `POST /api/monitor/run-now`, `POST /api/monitor/pause` y `POST /api/monitor/resume`.
+
 ## Windows package for another PC
 
 On this development PC, create the ZIP:
@@ -36,7 +112,7 @@ Before using it, edit `.env` on the target PC and set at least:
 ```env
 GNP_EMAIL=
 GNP_PASSWORD=
-PROFILE_DIR=C:\GNPMonitorProfile
+PROFILE_DIR=
 MONITOR_TOKEN=
 ```
 
@@ -83,13 +159,14 @@ pm2 restart gnp-monitor
 pm2 stop gnp-monitor
 ```
 
-## Healthcheck
+## Healthchecks
 
 ```powershell
+Invoke-RestMethod http://127.0.0.1:3000/health
 Invoke-RestMethod http://127.0.0.1:3000/api/health
 ```
 
-The endpoint returns current mode, last successful run, scheduler state, browser state, and config warnings.
+`/health` es el healthcheck simple del contenedor. `/api/health` incluye modo actual, ultima ejecucion exitosa, scheduler, navegador y advertencias.
 
 ## Operational env vars
 
@@ -104,30 +181,4 @@ INICIO_URL=https://portalintermediarios.gnp.com.mx/home/dashboard
 CONSULTA_URL=https://portalintermediarios.gnp.com.mx/home/pagina-iframe?tipo=aplicacion&menu=Todos%20los%20ramos%20Consulta
 ```
 
-Runtime files are written under `data/`, including `monitor.log`, JSON snapshots, and screenshots.
-
-## Railway notes
-
-Railway runs Linux, so Microsoft Edge is not available by default. Use Playwright Chromium instead:
-
-```env
-HOST=0.0.0.0
-HEADLESS=true
-BROWSER_CHANNEL=
-PROFILE_DIR=/app/data/profile
-TRUST_PROXY=true
-ALLOWED_IPS=your.public.ip.here
-MONITOR_TOKEN=use-a-long-random-token
-```
-
-If the deploy reports that Chromium is missing, set the Railway build command to:
-
-```bash
-npm install && npx playwright install chromium
-```
-
-If Chromium starts but reports missing Linux libraries, use a Docker image or build step that runs:
-
-```bash
-npx playwright install --with-deps chromium
-```
+Los archivos runtime se escriben bajo `DATA_DIR` (`data/` local o `/data` en contenedores), incluyendo SQLite, JSON snapshots, logs y screenshots.

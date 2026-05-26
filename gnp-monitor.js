@@ -8,6 +8,7 @@ const XLSX = require("xlsx");
 const { chromium } = require("playwright");
 
 const app = express();
+const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(__dirname, "data"));
 
 function parseBooleanEnv(value, fallback = false) {
   if (value === undefined || value === null || value === "") {
@@ -35,11 +36,15 @@ function getBrowserChannel() {
 }
 
 function getProfileDir() {
+  if (process.env.DATA_DIR) {
+    return path.join(DATA_DIR, "browser-profile");
+  }
+
   const requested = process.env.PROFILE_DIR || "";
   if (process.platform !== "win32" && (!requested || /^[A-Za-z]:[\\/]/.test(requested))) {
-    return path.join(__dirname, "data", "profile");
+    return path.join(DATA_DIR, "browser-profile");
   }
-  return requested || "C:\\Users\\TI\\AppData\\Local\\GNPMonitorProfile";
+  return requested ? path.resolve(requested) : path.join(DATA_DIR, "browser-profile");
 }
 
 const CONFIG = {
@@ -83,27 +88,28 @@ const CONFIG = {
   tvScrollIntervalMs: Math.max(Number(process.env.TV_SCROLL_INTERVAL_MS || 90), 20),
   queryDateFrom: process.env.QUERY_DATE_FROM || "",
   queryDateTo: process.env.QUERY_DATE_TO || "today",
-  dataDir: path.join(__dirname, "data"),
-  screenshotsDir: path.join(__dirname, "data", "screenshots"),
-  sessionInfoFile: path.join(__dirname, "data", "session-info.json"),
-  previousFile: path.join(__dirname, "data", "estado-anterior.json"),
-  currentFile: path.join(__dirname, "data", "estado-actual.json"),
-  diffFile: path.join(__dirname, "data", "cambios.json"),
-  rawFile: path.join(__dirname, "data", "raw-response.json"),
-  extractedFile: path.join(__dirname, "data", "items-extraidos.json"),
-  debugCapturedFile: path.join(__dirname, "data", "debug-captured.json"),
-  debugRequestsFile: path.join(__dirname, "data", "debug-requests.json"),
-  bitacoraFile: path.join(__dirname, "data", "bitacora.json"),
-  bitacoraExcelFile: path.join(__dirname, "data", "bitacora-seguimiento.xls"),
-  databaseFile: path.join(__dirname, "data", "gnp-monitor.db"),
-  logFile: path.join(__dirname, "data", "monitor.log"),
+  dataDir: DATA_DIR,
+  logsDir: path.join(DATA_DIR, "logs"),
+  screenshotsDir: path.join(DATA_DIR, "screenshots"),
+  sessionInfoFile: path.join(DATA_DIR, "session.json"),
+  previousFile: path.join(DATA_DIR, "estado-anterior.json"),
+  currentFile: path.join(DATA_DIR, "estado-actual.json"),
+  diffFile: path.join(DATA_DIR, "cambios.json"),
+  rawFile: path.join(DATA_DIR, "raw-response.json"),
+  extractedFile: path.join(DATA_DIR, "items-extraidos.json"),
+  debugCapturedFile: path.join(DATA_DIR, "debug-captured.json"),
+  debugRequestsFile: path.join(DATA_DIR, "debug-requests.json"),
+  bitacoraFile: path.join(DATA_DIR, "bitacora.json"),
+  bitacoraExcelFile: path.join(DATA_DIR, "bitacora-seguimiento.xls"),
+  databaseFile: path.join(DATA_DIR, "gnp-monitor.db"),
+  logFile: path.join(DATA_DIR, "logs", "monitor.log"),
 };
 
 if (CONFIG.trustProxy) {
   app.set("trust proxy", true);
 }
 
-for (const dir of [CONFIG.dataDir, CONFIG.screenshotsDir]) {
+for (const dir of [CONFIG.dataDir, CONFIG.logsDir, CONFIG.screenshotsDir, CONFIG.profileDir]) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -844,7 +850,10 @@ function importBitacoraEntries(entries, audit = buildAuditMeta({}, "Importacion 
     for (const item of items) {
       const previous = findExistingBitacoraEntry(item);
       if (previous) {
-        updateBitacoraEntry(sanitizeBitacoraEntry(item, previous), previous, "import", audit);
+        appendBitacoraFollowup(previous, sanitizeBitacoraEntry(item, previous), {
+          ...audit,
+          reason: audit.reason || "Seguimiento importado desde Excel",
+        });
         stats.updated += 1;
       } else {
         insertBitacoraEntry(sanitizeBitacoraEntry(item), "import", audit);
@@ -965,6 +974,48 @@ function updateBitacoraEntry(entry, previous = null, action = "update", audit = 
     return result;
   });
   return update(next);
+}
+
+function appendBitacoraFollowup(existing, followup, audit = {}) {
+  const database = initDatabase();
+  const base = existing.id ? existing : dbRowToBitacora(existing);
+  const maxHistory = database
+    .prepare("SELECT MAX(version) AS version FROM bitacora_history WHERE entry_id = ?")
+    .get(base.id);
+  const version = Math.max(Number(base.version || 1), Number(maxHistory?.version || 1)) + 1;
+  const after = {
+    ...base,
+    ...followup,
+    id: base.id,
+    version,
+    createdAt: base.createdAt,
+    updatedAt: nowIso(),
+    archivedAt: base.archivedAt || null,
+    archivedReason: base.archivedReason || "",
+  };
+
+  const save = database.transaction(() => {
+    recordBitacoraHistory(database, base.id, version, "followup", base, after, {
+      ...audit,
+      reason: audit.reason || "Seguimiento capturado sin modificar registro base",
+    });
+    database
+      .prepare("UPDATE bitacora SET version = ?, updated_at = ? WHERE id = ?")
+      .run(version, after.updatedAt, base.id);
+  });
+  save();
+
+  return { changes: 1, version };
+}
+
+function withMonitorSnapshot(entry, rows = runtime.data) {
+  const indexes = buildMonitorIndexes(filterArchivedMonitorRows(rows));
+  const match = findMonitorMatch(entry, indexes);
+  return {
+    ...entry,
+    monitor: match.row || null,
+    matchBy: match.matchBy || null,
+  };
 }
 
 function archiveBitacoraEntry(id, audit = buildAuditMeta({}, "Archivado desde UI")) {
@@ -1158,8 +1209,17 @@ function buildBitacoraComparison(entries, monitorRows) {
       ot: row.ot,
       estatus: row.estatus,
       poliza: row.poliza,
+      usuarioCreador: row.usuarioCreador,
       agente: row.agente,
       contratante: row.contratante,
+      tipoSolicitud: row.tipoSolicitud,
+      producto: row.producto,
+      guia: row.guia,
+      fechaRegistro: row.fechaRegistro,
+      primerIngreso: row.primerIngreso,
+      ultimoIngreso: row.ultimoIngreso,
+      medioApertura: row.medioApertura,
+      rol: row.rol,
       fechaCompromiso: row.fechaCompromiso,
     }));
 
@@ -1227,7 +1287,7 @@ function excelSheet(name, headers, rows) {
 }
 
 function writeBitacoraExcel(comparison) {
-  const report = comparison || buildBitacoraComparison(readBitacora(), runtime.data);
+  const report = comparison || buildBitacoraComparison(readBitacora(), filterArchivedMonitorRows(runtime.data));
   const generatedAt = nowIso();
 
   const bitacoraHeaders = [
@@ -1280,6 +1340,20 @@ function writeBitacoraExcel(comparison) {
     item.fechaSalida,
     item.aseguradora,
     item.descripcion,
+    item.comentarios,
+    item.archivedAt,
+    item.archivedReason,
+    item.updatedAt,
+  ]);
+
+  const archivedRows = (report.archived || []).map((item) => [
+    generatedAt,
+    item.folio,
+    item.poliza,
+    item.cliente,
+    item.tramite,
+    item.estado,
+    item.responsable,
     item.comentarios,
     item.archivedAt,
     item.archivedReason,
@@ -1350,6 +1424,11 @@ function writeBitacoraExcel(comparison) {
     '<?mso-application progid="Excel.Sheet"?>',
     '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">',
     excelSheet("Bitacora", bitacoraHeaders, bitacoraRows),
+    excelSheet(
+      "Archivados",
+      ["Generado", "Folio / OT", "Poliza", "Cliente", "Tramite", "Estado", "Responsable", "Comentarios", "Archivado", "Motivo", "Actualizado"],
+      archivedRows
+    ),
     excelSheet("Sin bitacora", sinBitacoraHeaders, sinBitacoraRows),
     excelSheet("Alertas", alertHeaders, alertRows),
     excelSheet("Historial", historyHeaders, historyRows),
@@ -1474,7 +1553,7 @@ function seedDatabaseFromCurrentState() {
     debug: readJsonSafe(CONFIG.debugCapturedFile, { source: "estado-actual" }),
   };
   saveMonitorSnapshot(result, runtime.data, runtime.diff);
-  saveComparisonHistory(buildBitacoraComparison(readBitacora(), runtime.data), snapshotId);
+  saveComparisonHistory(buildBitacoraComparison(readBitacora(), filterArchivedMonitorRows(runtime.data)), snapshotId);
 }
 
 function previewToken(token) {
@@ -1619,14 +1698,47 @@ function shouldKeepRowForCurrentView(row, referenceDate = new Date()) {
   return isCurrentMonthRow(row, referenceDate) || !isTerminada(row);
 }
 
-function mergeCurrentMonthWithOpenOlderRows(currentMonthRows, normalRows) {
+function bitacoraMonitorKeySets(entries) {
+  const keys = {
+    folios: new Set(),
+    policies: new Set(),
+  };
+
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const folio = normalizeTrackingKey(entry.folio);
+    const policy = normalizePolicyKey(entry.poliza);
+    if (folio) keys.folios.add(folio);
+    if (policy) keys.policies.add(policy);
+  }
+
+  return keys;
+}
+
+function rowMatchesBitacoraKeys(row, keys) {
+  if (!row || !keys) return false;
+  const ot = normalizeTrackingKey(row.ot);
+  const policy = normalizePolicyKey(row.poliza);
+  return Boolean((ot && keys.folios.has(ot)) || (policy && keys.policies.has(policy)));
+}
+
+function filterArchivedMonitorRows(rows, archivedEntries = readBitacora({ onlyArchived: true })) {
+  const archivedKeys = bitacoraMonitorKeySets(archivedEntries);
+  return (Array.isArray(rows) ? rows : []).filter((row) => !rowMatchesBitacoraKeys(row, archivedKeys));
+}
+
+function shouldKeepRowForCurrentViewWithBitacora(row, referenceDate, activeKeys) {
+  return shouldKeepRowForCurrentView(row, referenceDate) || rowMatchesBitacoraKeys(row, activeKeys);
+}
+
+function mergeCurrentMonthWithOpenOlderRows(currentMonthRows, normalRows, activeBitacoraEntries = readBitacora()) {
   const referenceDate = getReferenceMonth(currentMonthRows);
-  const merged = currentMonthRows.filter((row) => shouldKeepRowForCurrentView(row, referenceDate));
+  const activeKeys = bitacoraMonitorKeySets(activeBitacoraEntries);
+  const merged = currentMonthRows.filter((row) => shouldKeepRowForCurrentViewWithBitacora(row, referenceDate, activeKeys));
   const currentKeys = new Set(merged.map(makeKey).filter(Boolean));
 
   for (const row of normalRows) {
     const key = makeKey(row);
-    if (!key || currentKeys.has(key) || !shouldKeepRowForCurrentView(row, referenceDate)) {
+    if (!key || currentKeys.has(key) || !shouldKeepRowForCurrentViewWithBitacora(row, referenceDate, activeKeys)) {
       continue;
     }
 
@@ -1634,7 +1746,7 @@ function mergeCurrentMonthWithOpenOlderRows(currentMonthRows, normalRows) {
     currentKeys.add(key);
   }
 
-  return sortRows(merged);
+  return sortRows(filterArchivedMonitorRows(merged));
 }
 
 function compareRows(previousRows, currentRows) {
@@ -1798,6 +1910,7 @@ const runtime = {
   manualWatcherBusy: false,
   scheduler: {
     enabled: CONFIG.autoRefreshMinutes > 0,
+    paused: false,
     everyMinutes: CONFIG.autoRefreshMinutes,
     lastTrigger: null,
     nextTrigger: null,
@@ -1871,6 +1984,7 @@ function publicSessionInfo(sessionInfo) {
 function publicSchedulerInfo(scheduler) {
   return {
     enabled: Boolean(scheduler.enabled),
+    paused: Boolean(scheduler.paused),
     everyMinutes: scheduler.everyMinutes,
     lastTrigger: scheduler.lastTrigger,
     nextTrigger: scheduler.nextTrigger,
@@ -1932,6 +2046,11 @@ function getAllowedIpRules() {
 }
 
 function requireAllowedIp(req, res, next) {
+  if (req.path === "/health") {
+    next();
+    return;
+  }
+
   const allowedIps = getAllowedIpRules();
   const clientIp = getClientIp(req);
 
@@ -2246,13 +2365,68 @@ async function fillFirst(page, selectors, value, timeout = 10000) {
     return false;
   }
 
+  return fillLocatorValue(found.locator, value);
+}
+
+async function fillLocatorValue(locator, value) {
+  const text = String(value ?? "");
   try {
-    await found.locator.fill("");
-    await found.locator.fill(String(value ?? ""));
+    await locator.scrollIntoViewIfNeeded().catch(() => {});
+    await locator.click({ timeout: 1500 }).catch(() => {});
+    await locator.fill("");
+    await locator.fill(text);
+    await locator.evaluate((node) => {
+      node.dispatchEvent(new Event("input", { bubbles: true }));
+      node.dispatchEvent(new Event("change", { bubbles: true }));
+      node.dispatchEvent(new Event("blur", { bubbles: true }));
+    }).catch(() => {});
     return true;
   } catch {
-    return false;
+    try {
+      await locator.click({ timeout: 1500 }).catch(() => {});
+      const selectAll = process.platform === "darwin" ? "Meta+A" : "Control+A";
+      await locator.press(selectAll).catch(() => {});
+      await locator.press("Backspace").catch(() => {});
+      await locator.type(text, { delay: 20 });
+      await locator.evaluate((node) => {
+        node.dispatchEvent(new Event("input", { bubbles: true }));
+        node.dispatchEvent(new Event("change", { bubbles: true }));
+        node.dispatchEvent(new Event("blur", { bubbles: true }));
+      }).catch(() => {});
+      return true;
+    } catch {
+      return false;
+    }
   }
+}
+
+async function fillLoginFieldByLabel(page, labelPattern, value) {
+  const cleanPattern = new RegExp(labelPattern, "i");
+  for (const target of getSearchTargets(page)) {
+    const inputs = target.locator("input:visible");
+    const count = await inputs.count().catch(() => 0);
+    for (let index = 0; index < count; index += 1) {
+      const input = inputs.nth(index);
+      const matches = await input.evaluate((node, patternText) => {
+        const pattern = new RegExp(patternText, "i");
+        const field = node.closest("mat-form-field, .mat-form-field, .mat-mdc-form-field, .mdc-text-field, div");
+        const text = [
+          node.getAttribute("aria-label"),
+          node.getAttribute("placeholder"),
+          node.getAttribute("name"),
+          node.getAttribute("id"),
+          field?.textContent,
+        ].filter(Boolean).join(" ");
+        return pattern.test(text);
+      }, cleanPattern.source).catch(() => false);
+
+      if (matches && await fillLocatorValue(input, value)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 async function isLoginFormVisible(page) {
@@ -2738,10 +2912,23 @@ async function prepareLoginPage(page) {
     : false;
 
   if (!emailFilled && CONFIG.email) {
+    emailFilled = await fillLoginFieldByLabel(page, "correo|email|usuario", CONFIG.email);
+  }
+
+  if (!passwordFilled && CONFIG.password) {
+    passwordFilled = await fillLoginFieldByLabel(page, "contrase|password", CONFIG.password);
+  }
+
+  if (!emailFilled && CONFIG.email) {
     try {
       const textInput = page.locator('input[type="text"]:visible, input[id^="mat-input-"]:visible').first();
       await textInput.fill("");
       await textInput.type(CONFIG.email, { delay: 20 });
+      await textInput.evaluate((node) => {
+        node.dispatchEvent(new Event("input", { bubbles: true }));
+        node.dispatchEvent(new Event("change", { bubbles: true }));
+        node.dispatchEvent(new Event("blur", { bubbles: true }));
+      }).catch(() => {});
       emailFilled = true;
     } catch {}
   }
@@ -2751,9 +2938,16 @@ async function prepareLoginPage(page) {
       const passwordInput = page.locator('input[type="password"]:visible').first();
       await passwordInput.fill("");
       await passwordInput.type(CONFIG.password, { delay: 20 });
+      await passwordInput.evaluate((node) => {
+        node.dispatchEvent(new Event("input", { bubbles: true }));
+        node.dispatchEvent(new Event("change", { bubbles: true }));
+        node.dispatchEvent(new Event("blur", { bubbles: true }));
+      }).catch(() => {});
       passwordFilled = true;
     } catch {}
   }
+
+  await page.waitForTimeout(500);
 
   const captchaDetected = await detectCaptcha(page);
 
@@ -2808,10 +3002,7 @@ async function autoResolveManualLogin() {
   }
 }
 
-function waitForManualLogin(prepared, reason) {
-  const deferred = createDeferred();
-
-  runtime.manualLoginDeferred = deferred;
+function markManualLoginRequired(prepared = {}, reason = "Sesion vencida o requiere login manual.") {
   runtime.manualLogin = {
     required: true,
     reason,
@@ -2833,6 +3024,13 @@ function waitForManualLogin(prepared, reason) {
     "Login manual requerido. La ventana del navegador sigue abierta y el sistema esta esperando sesion valida."
   );
   pushLog("manual_login", reason);
+}
+
+function waitForManualLogin(prepared, reason) {
+  const deferred = createDeferred();
+
+  runtime.manualLoginDeferred = deferred;
+  markManualLoginRequired(prepared, reason);
 
   clearManualWatcher();
   runtime.manualWatcher = setInterval(() => {
@@ -2862,6 +3060,9 @@ async function continueAfterManualLogin() {
         lastLoginMethod: runtime.sessionInfo.lastLoginMethod || "manual",
         note: "La sesion ya estaba activa.",
       });
+      runtime.error = null;
+      resetManualLoginState();
+      setState("idle", "Sesion manual confirmada. El monitor esta listo para consultar.");
 
       return {
         ok: true,
@@ -2886,6 +3087,29 @@ async function continueAfterManualLogin() {
   return {
     ok: false,
     message: "Todavia no detecto una sesion valida despues del login manual.",
+  };
+}
+
+async function startAssistedLogin() {
+  if (runtime.busy && runtime.mode !== "waiting_manual_login") {
+    return {
+      ok: false,
+      busy: true,
+      message: "Hay una consulta en curso. Espera o cancelala antes de iniciar login manual.",
+    };
+  }
+
+  const page = await getActivePage();
+  const prepared = await prepareLoginPage(page);
+  runtime.error = null;
+  markManualLoginRequired(prepared, "Sesion vencida o requiere login manual.");
+
+  return {
+    ok: true,
+    requiresManualLogin: true,
+    message: CONFIG.headless
+      ? "Navegador iniciado en modo headless. Completa el login desde un entorno con acceso al perfil o ejecuta con HEADLESS=false."
+      : "Navegador abierto. Completa el login y marca la sesion como lista.",
   };
 }
 
@@ -3857,6 +4081,85 @@ async function clickBuscarIfVisible(page) {
   return clicked;
 }
 
+async function clearConsultaStatusFilter(page) {
+  page = await ensureConsultaOperational(page, "antes de limpiar estatus");
+
+  for (const target of getSearchTargets(page)) {
+    try {
+      const result = await target.evaluate(() => {
+        const normalize = (value) => String(value || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase();
+        const isVisible = (node) => {
+          if (!(node instanceof HTMLElement)) return false;
+          const style = window.getComputedStyle(node);
+          const rect = node.getBoundingClientRect();
+          return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+        };
+        const candidates = Array.from(document.querySelectorAll("select, md-select, mat-select, input"))
+          .filter(isVisible)
+          .filter((node) => {
+            const text = normalize([
+              node.getAttribute("aria-label"),
+              node.getAttribute("placeholder"),
+              node.getAttribute("name"),
+              node.getAttribute("id"),
+              node.getAttribute("ng-model"),
+              node.closest("md-input-container, mat-form-field, .mat-mdc-form-field, div")?.textContent,
+            ].filter(Boolean).join(" "));
+            return /\bestatus\b|\bestado\b/.test(text);
+          });
+
+        let changed = false;
+        for (const node of candidates) {
+          if (node instanceof HTMLSelectElement) {
+            node.selectedIndex = 0;
+            node.dispatchEvent(new Event("change", { bubbles: true }));
+            changed = true;
+            continue;
+          }
+
+          if (node instanceof HTMLInputElement) {
+            node.value = "";
+            node.dispatchEvent(new Event("input", { bubbles: true }));
+            node.dispatchEvent(new Event("change", { bubbles: true }));
+            changed = true;
+            continue;
+          }
+
+          try {
+            const angularApi = window.angular;
+            const ngModel = angularApi?.element(node).controller?.("ngModel");
+            if (ngModel) {
+              ngModel.$setViewValue?.(null);
+              ngModel.$render?.();
+              const scope = angularApi.element(node).scope?.() || angularApi.element(node).isolateScope?.();
+              scope?.$applyAsync?.();
+              changed = true;
+            }
+          } catch {}
+        }
+
+        return { ok: candidates.length > 0, changed, count: candidates.length };
+      });
+
+      if (result?.ok) {
+        pushLog("query", "Filtro de estatus limpiado para traer todos los estados.", {
+          changed: result.changed,
+          controls: result.count,
+          target: describeTarget(target),
+        });
+        await page.waitForTimeout(500);
+        return true;
+      }
+    } catch {}
+  }
+
+  pushLog("query", "No encontre filtro visible de estatus para limpiar; continuo con la consulta.");
+  return false;
+}
+
 async function setConsultaDateRange(page, range = getDefaultDateRange()) {
   page = await ensureConsultaOperational(page, "antes de ajustar fechas");
 
@@ -4653,6 +4956,7 @@ async function fetchCurrentRows(page, context) {
   try {
     // Primera consulta inicial: normalmente GNP trae un rango amplio.
     // Se conserva para rescatar OTs no terminadas que queden fuera del mes actual.
+    await clearConsultaStatusFilter(page).catch(() => {});
     await clickConsultar(page);
     page = runtime.page || page;
     context = runtime.browserContext || context;
@@ -4985,9 +5289,23 @@ async function runMonitor(trigger = "manual") {
 
     return true;
   } catch (error) {
-    runtime.error = serializeError(error);
-    setState("error", runtime.error);
-    pushLog("error", runtime.error);
+    const detail = serializeError(error);
+    const requiresManualLogin =
+      !runtime.cancelRequested &&
+      (runtime.manualLogin.required || /sesi[oó]n|captcha|login|iniciar sesi[oó]n/i.test(detail));
+    runtime.error = requiresManualLogin ? "Sesion vencida o requiere login manual." : detail;
+    if (requiresManualLogin) {
+      saveSessionInfo({
+        alive: false,
+        lastCheckedAt: nowIso(),
+        lastUrl: runtime.page && !runtime.page.isClosed() ? runtime.page.url() : null,
+        note: runtime.error,
+      });
+      markManualLoginRequired(runtime.manualLogin, runtime.error);
+    } else {
+      setState("error", runtime.error);
+    }
+    pushLog("error", detail);
     runtime.lastFailedRunAt = nowIso();
 
     try {
@@ -4998,7 +5316,12 @@ async function runMonitor(trigger = "manual") {
 
     return false;
   } finally {
-    resetManualLoginState();
+    if (runtime.manualLogin.required) {
+      clearManualWatcher();
+      runtime.manualLoginDeferred = null;
+    } else {
+      resetManualLoginState();
+    }
     clearTimeout(runTimeout);
     runtime.busy = false;
     runtime.cancelRequested = false;
@@ -5036,12 +5359,32 @@ app.get("/", (_req, res) => {
 });
 
 function buildStatusPayload(includeData) {
+  const visibleData = filterArchivedMonitorRows(runtime.data);
+  const visibleDiff = runtime.diff
+    ? {
+        ...runtime.diff,
+        nuevos: filterArchivedMonitorRows(runtime.diff.nuevos),
+        cambiados: filterArchivedMonitorRows(runtime.diff.cambiados),
+        eliminados: filterArchivedMonitorRows(runtime.diff.eliminados),
+        iguales: filterArchivedMonitorRows(runtime.diff.iguales),
+      }
+    : null;
+  if (visibleDiff?.summary) {
+    visibleDiff.summary = {
+      ...visibleDiff.summary,
+      totalActual: visibleData.length,
+      nuevos: visibleDiff.nuevos.length,
+      cambiados: visibleDiff.cambiados.length,
+      eliminados: visibleDiff.eliminados.length,
+      iguales: visibleDiff.iguales.length,
+    };
+  }
   const summary =
-    runtime.diff && runtime.diff.summary
-      ? runtime.diff.summary
-      : createEmptyDiff(runtime.data.length).summary;
+    visibleDiff && visibleDiff.summary
+      ? visibleDiff.summary
+      : createEmptyDiff(visibleData.length).summary;
   const dateRange = getDefaultDateRange();
-  const bitacora = buildBitacoraComparison(readBitacora(), runtime.data);
+  const bitacora = buildBitacoraComparison(readBitacora(), visibleData);
 
   return {
     busy: runtime.busy,
@@ -5051,11 +5394,12 @@ function buildStatusPayload(includeData) {
     lastUpdate: runtime.lastUpdate,
     dataVersion: runtime.dataVersion,
     summary,
-    data: includeData ? runtime.data : null,
-    diff: includeData ? runtime.diff : null,
+    data: includeData ? visibleData : null,
+    diff: includeData ? visibleDiff : null,
     bitacora,
     executionLog: runtime.executionLog,
     sessionInfo: publicSessionInfo(runtime.sessionInfo),
+    requiresManualLogin: Boolean(runtime.manualLogin.required),
     manualLogin: runtime.manualLogin,
     activeRun: runtime.activeRun,
     scheduler: publicSchedulerInfo(runtime.scheduler),
@@ -5083,12 +5427,21 @@ function buildStatusPayload(includeData) {
   };
 }
 
-function buildHealthPayload() {
+function buildBrowserPayload() {
   const context = runtime.browserContext;
   const page = runtime.page;
   const pageOpen = Boolean(page && !page.isClosed());
   const pages = context ? context.pages().filter((item) => !item.isClosed()) : [];
 
+  return {
+    contextOpen: Boolean(context),
+    pageOpen,
+    pages: pages.length,
+    currentUrl: pageOpen ? sanitizeUrlForClient(page.url()) : null,
+  };
+}
+
+function buildHealthPayload() {
   return {
     ok: !runtime.error && runtime.mode !== "error",
     busy: runtime.busy,
@@ -5100,12 +5453,8 @@ function buildHealthPayload() {
     lastRunEndedAt: runtime.lastRunEndedAt,
     lastSuccessfulRunAt: runtime.lastSuccessfulRunAt,
     lastFailedRunAt: runtime.lastFailedRunAt,
-    browser: {
-      contextOpen: Boolean(context),
-      pageOpen,
-      pages: pages.length,
-      currentUrl: pageOpen ? sanitizeUrlForClient(page.url()) : null,
-    },
+    requiresManualLogin: Boolean(runtime.manualLogin.required),
+    browser: buildBrowserPayload(),
     scheduler: publicSchedulerInfo(runtime.scheduler),
     auth: {
       postTokenRequired: Boolean(CONFIG.monitorToken),
@@ -5126,9 +5475,31 @@ app.get("/api/health", (_req, res) => {
   res.status(payload.ok ? 200 : 503).json(payload);
 });
 
+app.get("/health", (_req, res) => {
+  res.json({
+    ok: true,
+    status: "up",
+    serverTime: nowIso(),
+    mode: runtime.mode,
+  });
+});
+
+app.get("/api/session/status", requireMonitorToken, (_req, res) => {
+  res.json({
+    ok: true,
+    sessionActive: Boolean(runtime.sessionInfo.alive),
+    requiresManualLogin: Boolean(runtime.manualLogin.required),
+    lastExecution: runtime.lastRunEndedAt,
+    lastSuccessfulRun: runtime.lastSuccessfulRunAt,
+    lastError: runtime.error,
+    browser: buildBrowserPayload(),
+    scheduler: publicSchedulerInfo(runtime.scheduler),
+  });
+});
+
 app.get("/api/bitacora", requireMonitorToken, (_req, res) => {
   res.json({
-    ...buildBitacoraComparison(readBitacora(), runtime.data),
+    ...buildBitacoraComparison(readBitacora(), filterArchivedMonitorRows(runtime.data)),
     db: countBitacoraRecords(),
   });
 });
@@ -5154,7 +5525,7 @@ app.get("/api/bitacora/:id/history", requireMonitorToken, (_req, res) => {
 });
 
 app.get("/api/bitacora/excel", requireMonitorToken, (_req, res) => {
-  const file = writeBitacoraExcel(buildBitacoraComparison(readBitacora(), runtime.data));
+  const file = writeBitacoraExcel(buildBitacoraComparison(readBitacora(), filterArchivedMonitorRows(runtime.data)));
   res.download(file, "bitacora-seguimiento.xls");
 });
 
@@ -5174,7 +5545,7 @@ app.post("/api/bitacora/import-excel", requireMonitorToken, (req, res) => {
   }
 
   const stats = importBitacoraEntries(entries, buildAuditMetaFromRequest(req, "Importacion desde Excel"));
-  const comparison = buildBitacoraComparison(readBitacora(), runtime.data);
+  const comparison = buildBitacoraComparison(readBitacora(), filterArchivedMonitorRows(runtime.data));
   saveComparisonHistory(comparison);
   writeBitacoraExcel(comparison);
   pushLog("bitacora", "Bitacora importada desde Excel.", stats);
@@ -5198,22 +5569,25 @@ app.post("/api/bitacora", requireMonitorToken, (req, res) => {
   let action = "created";
 
   if (existing) {
-    savedEntry = sanitizeBitacoraEntry(entry, existing);
-    updateBitacoraEntry(savedEntry, existing, "update", {
+    savedEntry = withMonitorSnapshot(sanitizeBitacoraEntry(entry, existing));
+    const followupReason = audit.reason && audit.reason !== "Captura inicial"
+      ? audit.reason
+      : "Nueva pauta agregada al historial";
+    appendBitacoraFollowup(existing, savedEntry, {
       ...audit,
-      reason: audit.reason || "Actualizacion de registro existente",
+      reason: followupReason,
     });
-    action = "updated_existing";
+    action = "followup_existing";
   } else {
     insertBitacoraEntry(entry, "create", audit);
   }
 
   const afterCounts = countBitacoraRecords();
   const items = readBitacora();
-  const comparison = buildBitacoraComparison(items, runtime.data);
+  const comparison = buildBitacoraComparison(items, filterArchivedMonitorRows(runtime.data));
   saveComparisonHistory(comparison);
   writeBitacoraExcel(comparison);
-  pushLog("bitacora", action === "created" ? "Registro agregado a bitacora." : "Registro existente actualizado en bitacora.", {
+  pushLog("bitacora", action === "created" ? "Registro agregado a bitacora." : "Seguimiento agregado al historial de bitacora.", {
     id: existing?.id || entry.id,
     action,
     folio: savedEntry.folio,
@@ -5253,7 +5627,7 @@ app.put("/api/bitacora/:id", requireMonitorToken, (req, res) => {
   const entry = sanitizeBitacoraEntry(req.body || {}, previous);
   updateBitacoraEntry(entry, previous, "update", audit);
   const items = readBitacora();
-  const comparison = buildBitacoraComparison(items, runtime.data);
+  const comparison = buildBitacoraComparison(items, filterArchivedMonitorRows(runtime.data));
   saveComparisonHistory(comparison);
   writeBitacoraExcel(comparison);
   pushLog("bitacora", "Registro actualizado en bitacora.", {
@@ -5273,7 +5647,7 @@ app.delete("/api/bitacora/:id", requireMonitorToken, (req, res) => {
     return;
   }
 
-  const comparison = buildBitacoraComparison(readBitacora(), runtime.data);
+  const comparison = buildBitacoraComparison(readBitacora(), filterArchivedMonitorRows(runtime.data));
   saveComparisonHistory(comparison);
   writeBitacoraExcel(comparison);
   pushLog("bitacora", "Registro archivado en bitacora.", { id: req.params.id });
@@ -5290,7 +5664,7 @@ app.post("/api/bitacora/:id/restore", requireMonitorToken, (req, res) => {
     return;
   }
 
-  const comparison = buildBitacoraComparison(readBitacora(), runtime.data);
+  const comparison = buildBitacoraComparison(readBitacora(), filterArchivedMonitorRows(runtime.data));
   saveComparisonHistory(comparison);
   writeBitacoraExcel(comparison);
   pushLog("bitacora", "Registro restaurado en bitacora.", { id: req.params.id });
@@ -5307,7 +5681,33 @@ app.post("/api/run", requireMonitorToken, (_req, res) => {
   res.json({ ok: true });
 });
 
+app.post("/api/monitor/run-now", requireMonitorToken, (_req, res) => {
+  if (runtime.busy) {
+    res.status(409).json({ ok: false, busy: true, message: "Ya hay una ejecucion en curso." });
+    return;
+  }
+
+  void runMonitor("manual");
+  res.json({ ok: true });
+});
+
+app.post("/api/session/start-login", requireMonitorToken, async (_req, res) => {
+  const result = await startAssistedLogin().catch((error) => ({
+    ok: false,
+    message: serializeError(error),
+  }));
+  res.status(result.busy ? 409 : 200).json(result);
+});
+
 app.post("/api/continue-manual-login", requireMonitorToken, async (_req, res) => {
+  const result = await continueAfterManualLogin().catch((error) => ({
+    ok: false,
+    message: serializeError(error),
+  }));
+  res.json(result);
+});
+
+app.post("/api/session/mark-ready", requireMonitorToken, async (_req, res) => {
   const result = await continueAfterManualLogin().catch((error) => ({
     ok: false,
     message: serializeError(error),
@@ -5344,8 +5744,26 @@ app.post("/api/restart-browser", requireMonitorToken, async (_req, res) => {
   res.json({ ok: true });
 });
 
+app.post("/api/monitor/pause", requireMonitorToken, (_req, res) => {
+  runtime.scheduler.paused = true;
+  if (runtime.scheduler.timer) {
+    clearTimeout(runtime.scheduler.timer);
+    runtime.scheduler.timer = null;
+  }
+  runtime.scheduler.nextTrigger = null;
+  pushLog("scheduler", "Monitor automatico pausado.");
+  res.json({ ok: true, scheduler: publicSchedulerInfo(runtime.scheduler) });
+});
+
+app.post("/api/monitor/resume", requireMonitorToken, (_req, res) => {
+  runtime.scheduler.paused = false;
+  scheduleNextAutoRefresh();
+  pushLog("scheduler", "Monitor automatico reactivado.");
+  res.json({ ok: true, scheduler: publicSchedulerInfo(runtime.scheduler) });
+});
+
 function scheduleNextAutoRefresh(delayMs = CONFIG.autoRefreshMinutes * 60 * 1000) {
-  if (CONFIG.autoRefreshMinutes <= 0) {
+  if (!runtime.scheduler.enabled || runtime.scheduler.paused || CONFIG.autoRefreshMinutes <= 0) {
     runtime.scheduler.nextTrigger = null;
     return;
   }
@@ -5373,7 +5791,7 @@ function startServer() {
   initDatabase();
   seedDatabaseFromCurrentState();
   cleanupOldScreenshots();
-  writeBitacoraExcel(buildBitacoraComparison(readBitacora(), runtime.data));
+  writeBitacoraExcel(buildBitacoraComparison(readBitacora(), filterArchivedMonitorRows(runtime.data)));
   scheduleNextAutoRefresh();
 
   pushLog("system", "Monitor listo.");

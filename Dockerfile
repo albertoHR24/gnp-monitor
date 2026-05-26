@@ -1,18 +1,21 @@
-FROM mcr.microsoft.com/playwright:v1.59.1-noble
+FROM mcr.microsoft.com/playwright:v1.50.0-noble
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY . .
 
 ENV NODE_ENV=production
+ENV PORT=3000
+ENV DATA_DIR=/data
 ENV HOST=0.0.0.0
 ENV HEADLESS=true
 ENV BROWSER_CHANNEL=
-ENV PROFILE_DIR=/app/data/profile
 
-RUN mkdir -p /app/data/profile
+RUN mkdir -p /data/browser-profile /data/logs /data/screenshots
+
+EXPOSE 3000
 
 CMD ["npm", "start"]
