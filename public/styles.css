@@ -446,6 +446,108 @@ body {
   font-size: 12px;
 }
 
+.manual-view-btn {
+  margin-top: 10px;
+}
+
+/* Remote browser login */
+.remote-login-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  background: rgba(12, 18, 43, 0.86);
+}
+
+.remote-login-window {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(1500px, 100%);
+  max-height: calc(100vh - 32px);
+  padding: 16px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-hover);
+  border-radius: var(--radius-xl);
+}
+
+.remote-login-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.remote-login-header h2 {
+  font-size: 17px;
+}
+
+.remote-login-header p {
+  margin-top: 3px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.remote-login-toolbar,
+.remote-login-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.remote-login-input input {
+  min-width: min(420px, 100%);
+  padding: 9px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+}
+
+.remote-login-input span {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.remote-login-error {
+  padding: 8px 12px;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-bg);
+  color: var(--color-text);
+}
+
+.remote-screen-wrap {
+  position: relative;
+  min-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: white;
+}
+
+.remote-login-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  cursor: crosshair;
+}
+
+.remote-login-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 260px;
+  color: var(--color-bg);
+  background: rgba(255, 255, 255, 0.88);
+}
+
 /* TV Alerts */
 .tv-alerts {
   display: flex;

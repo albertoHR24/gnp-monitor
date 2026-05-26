@@ -2103,6 +2103,17 @@ function requireMonitorToken(req, res, next) {
   });
 }
 
+function requireRemoteControlToken(req, res, next) {
+  if (!CONFIG.monitorToken) {
+    res.status(503).json({
+      ok: false,
+      message: "Configura MONITOR_TOKEN para habilitar la vista remota de login.",
+    });
+    return;
+  }
+  requireMonitorToken(req, res, next);
+}
+
 app.use(applySecurityHeaders);
 app.use(requireAllowedIp);
 app.use("/api/bitacora/import-excel", express.raw({
@@ -3012,8 +3023,8 @@ function markManualLoginRequired(prepared = {}, reason = "Sesion vencida o requi
     passwordFilled: Boolean(prepared.passwordFilled),
     detectedCaptcha: Boolean(prepared.captchaDetected),
     instructions: [
-      "Usa la ventana del navegador que el sistema dejo abierta.",
-      "Termina el login manual y resuelve el reCAPTCHA si aparece.",
+      "Abre la vista de login remoto desde esta pantalla.",
+      "Termina el login manual y resuelve el reCAPTCHA en esa vista si aparece.",
       "No hace falta tocar el boton si el sistema detecta la sesion solo.",
       "Si no avanza solo, entonces pulsa el boton para continuar.",
     ],
@@ -3021,7 +3032,7 @@ function markManualLoginRequired(prepared = {}, reason = "Sesion vencida o requi
 
   setState(
     "waiting_manual_login",
-    "Login manual requerido. La ventana del navegador sigue abierta y el sistema esta esperando sesion valida."
+    "Login manual requerido. Abre la vista de login remoto para completar la sesion."
   );
   pushLog("manual_login", reason);
 }
@@ -3108,8 +3119,8 @@ async function startAssistedLogin() {
     ok: true,
     requiresManualLogin: true,
     message: CONFIG.headless
-      ? "Navegador iniciado en modo headless. Completa el login desde un entorno con acceso al perfil o ejecuta con HEADLESS=false."
-      : "Navegador abierto. Completa el login y marca la sesion como lista.",
+      ? "Navegador remoto preparado. Completa el login desde la vista integrada."
+      : "Navegador preparado. Completa el login y marca la sesion como lista.",
   };
 }
 
@@ -5495,6 +5506,79 @@ app.get("/api/session/status", requireMonitorToken, (_req, res) => {
     browser: buildBrowserPayload(),
     scheduler: publicSchedulerInfo(runtime.scheduler),
   });
+});
+
+async function getRemoteLoginPage() {
+  if (!runtime.page || runtime.page.isClosed()) {
+    throw new Error("No hay una pagina de login abierta. Pulsa Iniciar login primero.");
+  }
+
+  await preparePageForUse(runtime.page);
+  return runtime.page;
+}
+
+app.get("/api/session/remote-view", requireRemoteControlToken, async (_req, res) => {
+  try {
+    const page = await getRemoteLoginPage();
+    const image = await page.screenshot({
+      type: "jpeg",
+      quality: 70,
+      animations: "disabled",
+      timeout: 10000,
+    });
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.send(image);
+  } catch (error) {
+    res.status(409).json({ ok: false, message: serializeError(error) });
+  }
+});
+
+app.post("/api/session/remote-action", requireRemoteControlToken, async (req, res) => {
+  try {
+    const page = await getRemoteLoginPage();
+    const action = String(req.body?.action || "");
+
+    if (action === "click") {
+      const xRatio = Number(req.body?.xRatio);
+      const yRatio = Number(req.body?.yRatio);
+      if (!Number.isFinite(xRatio) || !Number.isFinite(yRatio) || xRatio < 0 || xRatio > 1 || yRatio < 0 || yRatio > 1) {
+        res.status(400).json({ ok: false, message: "Coordenadas de clic invalidas." });
+        return;
+      }
+      const viewport = page.viewportSize() || { width: 1600, height: 900 };
+      await page.mouse.click(viewport.width * xRatio, viewport.height * yRatio);
+    } else if (action === "type") {
+      const text = String(req.body?.text || "");
+      if (!text || text.length > 500) {
+        res.status(400).json({ ok: false, message: "El texto debe contener entre 1 y 500 caracteres." });
+        return;
+      }
+      await page.keyboard.type(text, { delay: 20 });
+    } else if (action === "key") {
+      const key = String(req.body?.key || "");
+      const allowedKeys = new Set(["Tab", "Enter", "Escape", "Backspace", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
+      if (!allowedKeys.has(key)) {
+        res.status(400).json({ ok: false, message: "Tecla remota no permitida." });
+        return;
+      }
+      await page.keyboard.press(key);
+    } else if (action === "scroll") {
+      const deltaY = Number(req.body?.deltaY);
+      if (!Number.isFinite(deltaY) || Math.abs(deltaY) > 2000) {
+        res.status(400).json({ ok: false, message: "Desplazamiento remoto invalido." });
+        return;
+      }
+      await page.mouse.wheel(0, deltaY);
+    } else {
+      res.status(400).json({ ok: false, message: "Accion remota no reconocida." });
+      return;
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(409).json({ ok: false, message: serializeError(error) });
+  }
 });
 
 app.get("/api/bitacora", requireMonitorToken, (_req, res) => {

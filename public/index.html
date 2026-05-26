@@ -72,7 +72,7 @@
           Actualizar
         </button>
 
-        <button id="startLoginBtn" class="btn-secondary" type="button">Iniciar login</button>
+        <button id="startLoginBtn" class="btn-secondary" type="button">Abrir login</button>
         <button id="manualBtn" class="btn-secondary" type="button" disabled>Marcar sesion lista</button>
         <button id="pauseMonitorBtn" class="btn-secondary" type="button">Pausar</button>
         <button id="resumeMonitorBtn" class="btn-secondary" type="button" disabled>Reanudar</button>
@@ -94,6 +94,7 @@
         <strong>Login manual requerido</strong>
         <p id="manualReason">El sistema no pudo pasar el acceso automaticamente.</p>
         <ul id="manualSteps"></ul>
+        <button id="openRemoteLoginBtn" class="btn-primary manual-view-btn" type="button">Abrir vista de login</button>
       </div>
     </section>
 
@@ -571,6 +572,39 @@
       </aside>
     </div>
   </main>
+
+  <section id="remoteLoginModal" class="remote-login-modal hidden" role="dialog" aria-modal="true" aria-labelledby="remoteLoginTitle">
+    <div class="remote-login-window">
+      <div class="remote-login-header">
+        <div>
+          <h2 id="remoteLoginTitle">Login GNP remoto</h2>
+          <p>Esta es la ventana que corre dentro de Railway. Haz clic sobre la imagen para operar el navegador.</p>
+        </div>
+        <button id="closeRemoteLoginBtn" class="icon-btn" type="button" aria-label="Cerrar vista de login">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="remote-login-toolbar">
+        <button id="refreshRemoteLoginBtn" class="btn-secondary" type="button">Refrescar vista</button>
+        <button class="btn-secondary remote-key-btn" type="button" data-key="Tab">Tab</button>
+        <button class="btn-secondary remote-key-btn" type="button" data-key="Enter">Enter</button>
+        <button class="btn-secondary remote-key-btn" type="button" data-key="Backspace">Borrar</button>
+        <button id="remoteScrollUpBtn" class="btn-secondary" type="button">Subir</button>
+        <button id="remoteScrollDownBtn" class="btn-secondary" type="button">Bajar</button>
+        <button id="remoteMarkReadyBtn" class="btn-primary" type="button">Marcar sesion lista</button>
+      </div>
+      <div class="remote-login-input">
+        <input id="remoteTextInput" type="password" autocomplete="off" placeholder="Texto para el campo seleccionado (oculto)" />
+        <button id="remoteSendTextBtn" class="btn-secondary" type="button">Enviar texto</button>
+        <span>Haz clic primero sobre el campo dentro de la imagen.</span>
+      </div>
+      <div id="remoteLoginError" class="remote-login-error hidden"></div>
+      <div class="remote-screen-wrap">
+        <img id="remoteLoginImage" class="remote-login-image" alt="Vista remota del navegador de login" />
+        <div id="remoteLoginLoading" class="remote-login-loading">Cargando vista del navegador...</div>
+      </div>
+    </div>
+  </section>
 
   <script src="/app.js"></script>
 </body>

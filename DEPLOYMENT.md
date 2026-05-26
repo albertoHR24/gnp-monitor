@@ -64,17 +64,20 @@ En un VPS donde un operador tenga acceso al navegador gráfico, usa `HEADLESS=fa
 3. Configura como mínimo `DATA_DIR=/data`, `HOST=0.0.0.0`, `PORT=3000`, `HEADLESS=true` y `BROWSER_CHANNEL=`.
 4. Configura `MONITOR_TOKEN` si la aplicación quedará expuesta; `TRUST_PROXY=true` y `ALLOWED_IPS` sólo cuando la red/proxy permitan esa restricción.
 
-Railway conserva cookies y SQLite mediante el volumen, pero un contenedor headless no ofrece por sí solo una ventana visible para resolver CAPTCHA. Para una sesión que requiera interacción, inicia el perfil desde un entorno con navegador accesible montando el mismo almacenamiento, o despliega en un VPS con escritorio remoto; después el monitor reutiliza `/data/browser-profile`.
+Railway conserva cookies y SQLite mediante el volumen. Como el navegador corre dentro del contenedor, no puede abrir una ventana en tu PC: usa el boton `Abrir login` y la vista remota integrada para ver y operar esa pagina. Mantener `MONITOR_TOKEN` configurado es obligatorio si expones esta funcion, porque permite ver y controlar la pantalla de login.
+
+Si reCAPTCHA rechaza el navegador headless o la IP del centro de datos aun con operacion manual, la alternativa es un VPS con escritorio remoto o preparar la sesion en un entorno compatible conservando `/data/browser-profile`.
 
 ## Login asistido
 
 El servidor no termina si GNP solicita login o reCAPTCHA. Marca `requiresManualLogin: true`, conserva el perfil del navegador y expone controles en la interfaz:
 
-- `Iniciar login` prepara la pantalla de acceso.
+- `Abrir login` prepara la pantalla de acceso y abre la vista del navegador que corre en Railway.
+- En la vista remota, haz clic sobre la imagen y utiliza el campo oculto para enviar texto al control seleccionado.
 - `Marcar sesion lista` valida que el operador ya inició sesión.
 - `Actualizar`, `Pausar` y `Reanudar` operan el monitor.
 
-Los endpoints equivalentes son `GET /api/session/status`, `POST /api/session/start-login`, `POST /api/session/mark-ready`, `POST /api/monitor/run-now`, `POST /api/monitor/pause` y `POST /api/monitor/resume`.
+Los endpoints equivalentes son `GET /api/session/status`, `POST /api/session/start-login`, `GET /api/session/remote-view`, `POST /api/session/remote-action`, `POST /api/session/mark-ready`, `POST /api/monitor/run-now`, `POST /api/monitor/pause` y `POST /api/monitor/resume`.
 
 ## Windows package for another PC
 

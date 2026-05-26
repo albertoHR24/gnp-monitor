@@ -50,6 +50,9 @@ let statusPollTimer = null;
 let autoScrollTimer = null;
 let lastAlertSignature = "";
 let postTokenRequired = false;
+let remoteLoginTimer = null;
+let remoteImageUrl = null;
+let remoteViewBusy = false;
 let tvConfig = {
   rowsPerPage: 18,
   pageSeconds: 25,
@@ -2034,6 +2037,29 @@ async function apiPost(path) {
   return apiJson(path, { method: "POST" });
 }
 
+async function apiBlob(path) {
+  const headers = {};
+  const token = getMonitorToken();
+  if (token) {
+    headers["X-Monitor-Token"] = token;
+  }
+
+  let response = await fetch(path, { headers });
+  if (response.status === 401) {
+    const nextToken = promptForMonitorToken();
+    if (!nextToken) {
+      throw new Error("Token local requerido.");
+    }
+    response = await fetch(path, { headers: { "X-Monitor-Token": nextToken } });
+  }
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.message || `No se pudo obtener la vista remota. HTTP ${response.status}`);
+  }
+  return response.blob();
+}
+
 async function apiJson(path, options = {}) {
   const headers = {};
   const optionHeaders = options.headers || {};
@@ -2099,12 +2125,22 @@ async function runNow() {
 }
 
 async function startManualLogin() {
-  await apiPost("/api/session/start-login").catch((error) => alert(error.message));
+  try {
+    await apiPost("/api/session/start-login");
+    openRemoteLogin();
+  } catch (error) {
+    alert(error.message);
+  }
   await fetchStatus();
 }
 
 async function continueManual() {
-  await apiPost("/api/session/mark-ready").catch((error) => alert(error.message));
+  try {
+    await apiPost("/api/session/mark-ready");
+    closeRemoteLogin();
+  } catch (error) {
+    alert(error.message);
+  }
   await fetchStatus();
 }
 
@@ -2126,6 +2162,74 @@ async function cancelRun() {
 async function restartBrowser() {
   await apiPost("/api/restart-browser").catch((error) => alert(error.message));
   await fetchStatus();
+}
+
+function setRemoteLoginError(message = "") {
+  const element = document.getElementById("remoteLoginError");
+  element.textContent = message;
+  element.classList.toggle("hidden", !message);
+}
+
+async function refreshRemoteLogin() {
+  const modal = document.getElementById("remoteLoginModal");
+  if (modal.classList.contains("hidden") || remoteViewBusy) return;
+  remoteViewBusy = true;
+  const loading = document.getElementById("remoteLoginLoading");
+  const image = document.getElementById("remoteLoginImage");
+  loading.classList.remove("hidden");
+
+  try {
+    const blob = await apiBlob(`/api/session/remote-view?t=${Date.now()}`);
+    const nextUrl = URL.createObjectURL(blob);
+    image.onload = () => {
+      loading.classList.add("hidden");
+    };
+    image.src = nextUrl;
+    if (remoteImageUrl) URL.revokeObjectURL(remoteImageUrl);
+    remoteImageUrl = nextUrl;
+    setRemoteLoginError();
+  } catch (error) {
+    loading.classList.add("hidden");
+    setRemoteLoginError(error.message);
+  } finally {
+    remoteViewBusy = false;
+  }
+}
+
+function openRemoteLogin() {
+  document.getElementById("remoteLoginModal").classList.remove("hidden");
+  setRemoteLoginError();
+  void refreshRemoteLogin();
+  if (remoteLoginTimer) clearInterval(remoteLoginTimer);
+  remoteLoginTimer = setInterval(refreshRemoteLogin, 1500);
+}
+
+function closeRemoteLogin() {
+  document.getElementById("remoteLoginModal").classList.add("hidden");
+  if (remoteLoginTimer) {
+    clearInterval(remoteLoginTimer);
+    remoteLoginTimer = null;
+  }
+}
+
+async function remoteAction(payload) {
+  try {
+    await apiJson("/api/session/remote-action", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    await refreshRemoteLogin();
+  } catch (error) {
+    setRemoteLoginError(error.message);
+  }
+}
+
+async function sendRemoteText() {
+  const input = document.getElementById("remoteTextInput");
+  const text = input.value;
+  if (!text) return;
+  await remoteAction({ action: "type", text });
+  input.value = "";
 }
 
 function togglePanel() {
@@ -2198,11 +2302,36 @@ function showFloatingTooltip(target) {
 // Event Listeners
 document.getElementById("runBtn").addEventListener("click", runNow);
 document.getElementById("startLoginBtn").addEventListener("click", startManualLogin);
+document.getElementById("openRemoteLoginBtn").addEventListener("click", openRemoteLogin);
 document.getElementById("manualBtn").addEventListener("click", continueManual);
 document.getElementById("pauseMonitorBtn").addEventListener("click", pauseMonitor);
 document.getElementById("resumeMonitorBtn").addEventListener("click", resumeMonitor);
 document.getElementById("cancelBtn").addEventListener("click", cancelRun);
 document.getElementById("restartBrowserBtn").addEventListener("click", restartBrowser);
+document.getElementById("closeRemoteLoginBtn").addEventListener("click", closeRemoteLogin);
+document.getElementById("refreshRemoteLoginBtn").addEventListener("click", refreshRemoteLogin);
+document.getElementById("remoteMarkReadyBtn").addEventListener("click", continueManual);
+document.getElementById("remoteSendTextBtn").addEventListener("click", sendRemoteText);
+document.getElementById("remoteTextInput").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    void sendRemoteText();
+  }
+});
+document.getElementById("remoteLoginImage").addEventListener("click", (event) => {
+  const rect = event.currentTarget.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  void remoteAction({
+    action: "click",
+    xRatio: (event.clientX - rect.left) / rect.width,
+    yRatio: (event.clientY - rect.top) / rect.height,
+  });
+});
+document.querySelectorAll(".remote-key-btn").forEach((button) => {
+  button.addEventListener("click", () => remoteAction({ action: "key", key: button.dataset.key }));
+});
+document.getElementById("remoteScrollUpBtn").addEventListener("click", () => remoteAction({ action: "scroll", deltaY: -600 }));
+document.getElementById("remoteScrollDownBtn").addEventListener("click", () => remoteAction({ action: "scroll", deltaY: 600 }));
 document.getElementById("refreshBtn").addEventListener("click", fetchStatus);
 
 document.getElementById("searchInput").addEventListener("input", applyFilters);
