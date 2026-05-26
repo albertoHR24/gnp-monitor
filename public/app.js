@@ -1768,7 +1768,7 @@ function renderChangeTicker(diff) {
     }),
     ...newRows.map((row) => `${row.ot}: Nuevo`),
   ];
-
+//hi
   clearElement(textBox);
   if (!messages.length) {
     ticker.classList.add("hidden");
