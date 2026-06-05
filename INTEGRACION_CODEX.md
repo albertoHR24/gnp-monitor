@@ -60,9 +60,10 @@ El backend carga `.env` con `dotenv`. Variables clave:
 - `ALLOWED_IPS`: lista separada por comas de IPs o CIDR permitidos.
 - `TRUST_PROXY`: habilita `app.set("trust proxy", true)` cuando hay proxy confiable.
 - `GNP_EMAIL`, `GNP_PASSWORD`: credenciales para login automatico.
-- `LOGIN_URL`, `INICIO_URL`/`DASHBOARD_URL`, `CONSULTA_URL`: URLs del portal GNP.
+- `LOGIN_URL`, `INICIO_URL`/`DASHBOARD_URL`, `CONSULTA_URL`, `SINIESTROS_URL`: URLs del portal GNP.
 - `BROWSER_CHANNEL`: en Windows suele ser `msedge`; en Linux debe quedar vacio para Chromium.
-- `PROFILE_DIR`: perfil persistente del navegador.
+- `PROFILE_DIR`: perfil persistente del navegador usado por Monitor.
+- `SINIESTROS_PROFILE_DIR`: perfil persistente separado para Siniestros; si queda vacio se crea junto a `PROFILE_DIR`.
 - `HEADLESS`: `true` para correr sin ventana, `false` para operacion local visible.
 - `AUTO_REFRESH_MINUTES`: intervalo automatico de consulta. `0` desactiva scheduler.
 - `MANUAL_LOGIN_TIMEOUT_MINUTES`: espera maxima para login manual.
@@ -132,7 +133,7 @@ Secuencia:
 1. Evita ejecuciones concurrentes si `runtime.busy` esta activo.
 2. Cancela temporalmente el scheduler si hay uno programado.
 3. Inicializa estado runtime, log y timeout total.
-4. Obtiene o crea contexto Playwright persistente con `PROFILE_DIR`.
+4. Obtiene o crea contexto Playwright persistente con `PROFILE_DIR` para Monitor. Siniestros usa otro contexto persistente con `SINIESTROS_PROFILE_DIR`.
 5. Obtiene pagina activa.
 6. Verifica sesion existente o intenta login automatico con `GNP_EMAIL` y `GNP_PASSWORD`.
 7. Si hay captcha, MFA, bloqueo o formulario no resoluble, cambia a `waiting_manual_login`.
@@ -615,4 +616,3 @@ Primero inspecciona el codigo, luego implementa la integracion con cambios minim
 - Si se integra como servicio, mantener `HOST=127.0.0.1` y poner proxy del sistema principal delante.
 - Si se integra en Linux, validar que Playwright Chromium este instalado con dependencias.
 - Si se necesita multiusuario real, extender auditoria/autenticacion; hoy la UI usa nombre de operador desde `localStorage` y token compartido.
-

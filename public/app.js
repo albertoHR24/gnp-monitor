@@ -5,6 +5,7 @@ const modeLabels = {
   auto_login: "Login automatico",
   waiting_manual_login: "Login manual",
   querying: "Consultando",
+  siniestros: "Siniestros ED",
   done: "Completado",
   error: "Error",
 };
@@ -14,6 +15,7 @@ const loadingMessages = {
   checking_session: "Verificando sesion activa...",
   auto_login: "Intentando login automatico...",
   querying: "Consultando ordenes de trabajo...",
+  siniestros: "Consultando Expediente Digital...",
 };
 
 const statusPriority = {
@@ -31,6 +33,12 @@ let rowsPerPage = 18;
 let filteredData = [];
 let allData = [];
 let bitacoraData = { items: [], alerts: [], sinBitacora: [], summary: {} };
+let siniestrosData = { total: 0, completed: 0, results: [], busy: false };
+let axaSiniestrosData = { total: 0, completed: 0, results: [], busy: false };
+let axaState = { data: [], diff: null, summary: {}, busy: false, configured: false };
+let axaRows = [];
+let axaFilteredRows = [];
+let axaQuickFilter = "all";
 let diffData = null;
 let expandedBitacoraId = null;
 let expandedBitacoraDetailId = null;
@@ -42,6 +50,7 @@ let hiddenTerminatedCount = 0;
 let lastStatusData = null;
 let activeUiMode = localStorage.getItem("gnpUiMode") || "operator";
 let activeMainView = localStorage.getItem("gnpMainView") || "monitor";
+let activeCarrier = localStorage.getItem("gnpCarrier") || (activeMainView === "axa" || activeMainView === "axa-siniestros" ? "axa" : "gnp");
 let bitacoraMaximized = false;
 let quickFilter = localStorage.getItem("gnpQuickFilter") || "all";
 let selectedOt = null;
@@ -50,6 +59,10 @@ let statusPollTimer = null;
 let autoScrollTimer = null;
 let lastAlertSignature = "";
 let postTokenRequired = false;
+let currentUser = null;
+let adminMetricsState = { metrics: [], cases: [], users: [] };
+let selectedAdminUserId = "";
+let activeAdminTab = "users";
 let remoteLoginTimer = null;
 let remoteImageUrl = null;
 let remoteViewBusy = false;
@@ -214,6 +227,8 @@ function setTvOverride(key, value) {
 function setUiMode(mode) {
   activeUiMode = mode === "tv" ? "tv" : "operator";
   if (activeUiMode === "tv") {
+    activeCarrier = "gnp";
+    localStorage.setItem("gnpCarrier", activeCarrier);
     activeMainView = "monitor";
     localStorage.setItem("gnpMainView", activeMainView);
     setQuickFilter("all");
@@ -231,15 +246,69 @@ function setUiMode(mode) {
   resetTableScroll(document.getElementById("tableWrap"));
 }
 
+function carrierView(module) {
+  const selectedModule = module === "siniestros" ? "siniestros" : "monitor";
+  if (selectedModule === "siniestros") {
+    return activeCarrier === "axa" ? "axa-siniestros" : "siniestros";
+  }
+  return activeCarrier === "axa" ? "axa" : "monitor";
+}
+
+function setCarrier(carrier) {
+  activeCarrier = carrier === "axa" ? "axa" : "gnp";
+  localStorage.setItem("gnpCarrier", activeCarrier);
+  if (["monitor", "axa"].includes(activeMainView)) {
+    setMainView(carrierView("monitor"));
+    return;
+  }
+  if (["siniestros", "axa-siniestros"].includes(activeMainView)) {
+    setMainView(carrierView("siniestros"));
+    return;
+  }
+  setMainView(activeMainView);
+}
+
 function setMainView(view) {
-  activeMainView = view === "bitacora" && activeUiMode !== "tv" ? "bitacora" : "monitor";
+  const requested = ["axa", "bitacora", "siniestros", "axa-siniestros", "admin"].includes(view) ? view : "monitor";
+  activeMainView = activeUiMode !== "tv" ? requested : "monitor";
+  if (activeMainView === "admin" && currentUser?.role !== "admin") {
+    activeMainView = "monitor";
+  }
+  if (activeMainView === "axa" || activeMainView === "axa-siniestros") {
+    activeCarrier = "axa";
+  } else if (activeMainView === "monitor" || activeMainView === "siniestros") {
+    activeCarrier = "gnp";
+  }
+  localStorage.setItem("gnpCarrier", activeCarrier);
   localStorage.setItem("gnpMainView", activeMainView);
+  document.body.classList.toggle("carrier-axa", activeCarrier === "axa");
+  document.body.classList.toggle("carrier-gnp", activeCarrier !== "axa");
+  document.body.classList.toggle("axa-view", activeMainView === "axa");
+  document.body.classList.toggle("axa-siniestros-view", activeMainView === "axa-siniestros");
   document.body.classList.toggle("bitacora-view", activeMainView === "bitacora");
-  document.body.classList.toggle("monitor-view", activeMainView !== "bitacora");
-  document.getElementById("monitorViewBtn").classList.toggle("active", activeMainView !== "bitacora");
+  document.body.classList.toggle("siniestros-view", activeMainView === "siniestros");
+  document.body.classList.toggle("admin-view", activeMainView === "admin");
+  document.body.classList.toggle("monitor-view", activeMainView === "monitor");
+  document.getElementById("gnpCarrierBtn")?.classList.toggle("active", activeCarrier !== "axa");
+  document.getElementById("axaCarrierBtn")?.classList.toggle("active", activeCarrier === "axa");
+  document.getElementById("monitorViewBtn").classList.toggle("active", activeMainView === "monitor" || activeMainView === "axa");
   document.getElementById("bitacoraViewBtn").classList.toggle("active", activeMainView === "bitacora");
+  document.getElementById("siniestrosViewBtn").classList.toggle("active", activeMainView === "siniestros" || activeMainView === "axa-siniestros");
+  document.getElementById("adminViewBtn").classList.toggle("active", activeMainView === "admin");
   if (activeMainView === "bitacora") {
     renderBitacora();
+  }
+  if (activeMainView === "siniestros") {
+    renderSiniestros();
+  }
+  if (activeMainView === "axa") {
+    renderAxa();
+  }
+  if (activeMainView === "axa-siniestros") {
+    renderAxaSiniestros();
+  }
+  if (activeMainView === "admin") {
+    void refreshAdminMetrics();
   }
 }
 
@@ -372,6 +441,8 @@ function titleCase(value) {
 function formatRole(value) {
   const text = normalizeStatus(value);
   const roles = {
+    admin: "Admin",
+    executive: "Ejecutivo",
     "coordinacion da": "Coordinador Agencia GMM",
     coordinacion_da: "Coordinador Agencia GMM",
     "agente certificado": "Coordinador Agente Certificado GMM",
@@ -379,6 +450,7 @@ function formatRole(value) {
     "coordinador agencia gmm": "Coordinador Agencia GMM",
     "coordinador agente certificado gmm": "Coordinador Agente Certificado GMM",
   };
+  if (!text) return "-";
   return roles[text] || titleCase(value);
 }
 
@@ -487,6 +559,144 @@ function renderOperationalSummary() {
   setText("quickNewCount", summary.new);
   setText("sumVencidas", summary.due);
   setText("sumHoy", summary.today);
+}
+
+function diffHasRow(diff, bucket, ot) {
+  if (!diff || !Array.isArray(diff[bucket])) return false;
+  if (bucket === "cambiados") {
+    return diff[bucket].some((item) => item.ot === ot || item.current?.ot === ot);
+  }
+  return diff[bucket].some((item) => item.ot === ot);
+}
+
+function getRowsSummary(rows, diff = null) {
+  const openRows = rows.filter(isOpenRow);
+  return {
+    all: rows.length,
+    open: openRows.length,
+    due: openRows.filter((row) => getDueInfo(row).key === "due").length,
+    today: openRows.filter((row) => getDueInfo(row).key === "today").length,
+    changed: rows.filter((row) => diffHasRow(diff, "cambiados", row.ot)).length,
+    new: rows.filter((row) => diffHasRow(diff, "nuevos", row.ot)).length,
+  };
+}
+
+function matchesAxaQuickFilter(row) {
+  if (axaQuickFilter === "new") return diffHasRow(axaState.diff, "nuevos", row.ot);
+  if (axaQuickFilter === "changed") return diffHasRow(axaState.diff, "cambiados", row.ot);
+  if (axaQuickFilter === "open") return isOpenRow(row);
+  if (axaQuickFilter === "due") return getDueInfo(row).key === "due";
+  if (axaQuickFilter === "today") return getDueInfo(row).key === "today";
+  return true;
+}
+
+function renderAxa(data = axaState) {
+  axaState = {
+    ...axaState,
+    ...data,
+    data: Array.isArray(data.data) ? data.data : axaState.data || [],
+    diff: data.diff || axaState.diff,
+    summary: data.summary || axaState.summary || {},
+  };
+  axaRows = axaState.data || [];
+  const summary = axaState.summary || {};
+  const operational = getRowsSummary(axaRows, axaState.diff);
+  const setText = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = String(value);
+  };
+
+  setText("axaClock", formatClock(new Date().toISOString()));
+  setText("axaLastUpdate", fmtDate(axaState.lastUpdate));
+  setText("axaNextUpdate", axaState.configured ? "Pendiente" : "Desactivada");
+  setText("axaSessionStatus", axaState.configured ? "Configurada" : "No configurada");
+  setText("axaRecordCount", axaRows.length);
+  setText("axaTotal", summary.totalActual ?? axaRows.length);
+  setText("axaNewCount", summary.nuevos ?? 0);
+  setText("axaChangedCount", summary.cambiados ?? 0);
+  setText("axaDeletedCount", summary.eliminados ?? 0);
+  setText("axaDueCount", operational.due);
+  setText("axaTodayCount", operational.today);
+  setText("axaStateMessage", axaState.message || "Vista lista");
+  setText("axaStateSecondary", axaState.error || (axaState.configured ? "Conectada" : "Pendiente de flujo AXA"));
+  setText("axaQuickAllCount", operational.all);
+  setText("axaQuickDueCount", operational.due);
+  setText("axaQuickTodayCount", operational.today);
+  setText("axaQuickOpenCount", operational.open);
+  setText("axaQuickChangedCount", operational.changed);
+  setText("axaQuickNewCount", operational.new);
+
+  const statusSelect = document.getElementById("axaStatusFilter");
+  if (statusSelect) {
+    const current = statusSelect.value;
+    const statuses = [...new Set(axaRows.map((row) => displayValue(row.estatus)).filter((value) => value !== "-"))].sort();
+    statusSelect.innerHTML = '<option value="">Todos los estados AXA</option>';
+    statuses.forEach((status) => {
+      const option = document.createElement("option");
+      option.value = status;
+      option.textContent = status;
+      statusSelect.appendChild(option);
+    });
+    statusSelect.value = [...statusSelect.options].some((option) => option.value === current) ? current : "";
+  }
+
+  applyAxaFilters();
+}
+
+function applyAxaFilters() {
+  const search = normalizeText(document.getElementById("axaSearchInput")?.value || "").trim();
+  const status = normalizeText(document.getElementById("axaStatusFilter")?.value || "");
+  axaFilteredRows = sortForTv(axaRows.filter((row) => {
+    if (!matchesAxaQuickFilter(row)) return false;
+    if (status && !normalizeText(row.estatus).includes(status)) return false;
+    if (search) {
+      const searchable = [row.ot, row.poliza, row.contratante, row.agente, row.tipoSolicitud, row.producto].join(" ");
+      if (!normalizeText(searchable).includes(search)) return false;
+    }
+    return true;
+  }));
+  renderAxaTable();
+}
+
+function renderAxaTable() {
+  const tbody = document.getElementById("axaTbody");
+  const panel = document.querySelector(".axa-table-panel");
+  const empty = document.getElementById("axaEmptyState");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  setTextContent("axaTableCount", axaFilteredRows.length ? `${axaFilteredRows.length} registros` : `${axaRows.length} registros`);
+  panel?.classList.toggle("has-data", axaFilteredRows.length > 0);
+  if (empty) empty.style.display = axaFilteredRows.length ? "none" : "flex";
+
+  axaFilteredRows.forEach((row) => {
+    const tr = document.createElement("tr");
+    const due = getDueInfo(row);
+    tr.classList.add(`row-priority-${due.key}`);
+    if (diffHasRow(axaState.diff, "nuevos", row.ot)) tr.classList.add("row-new");
+    if (diffHasRow(axaState.diff, "cambiados", row.ot)) tr.classList.add("row-changed");
+    appendCell(tr, row.ot, { strong: true, className: "col-field-ot" });
+    appendCell(tr, row.usuarioCreador, { className: "col-field-usuario" });
+    appendCell(tr, row.estatus, { badgeClass: estatusBadgeClass(row.estatus), className: "col-field-estatus" });
+    appendPriorityCell(tr, row);
+    appendCell(tr, formatGnpDate(row.fechaCompromiso), { className: "col-field-compromiso" });
+    appendCell(tr, row.poliza, { className: "col-field-poliza" });
+    appendCell(tr, row.agente, { className: "col-field-agente" });
+    appendCell(tr, row.contratante, { className: "col-field-contratante" });
+    appendCell(tr, titleCase(row.tipoSolicitud), { className: "col-field-tipo" });
+    appendCell(tr, row.producto, { className: "col-field-producto" });
+    appendCell(tr, row.guia, { className: "col-field-guia" });
+    appendCell(tr, formatGnpDate(row.fechaRegistro), { className: "col-field-registro" });
+    appendCell(tr, formatGnpDate(row.primerIngreso), { className: "col-field-primer-ingreso" });
+    appendCell(tr, formatGnpDate(row.ultimoIngreso), { className: "col-field-ultimo-ingreso" });
+    appendCell(tr, row.medioApertura, { className: "col-field-medio" });
+    appendCell(tr, formatRole(row.rol), { className: "col-field-rol" });
+    tbody.appendChild(tr);
+  });
+}
+
+function setTextContent(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = value;
 }
 
 function applyFilters() {
@@ -827,6 +1037,8 @@ function renderChanges(diff) {
 }
 
 function getBitacoraPayload() {
+  const otInterna = document.getElementById("bitOTInterna").value || generateOTInterna();
+  const ramo = resolveRamoInputValue(document.getElementById("bitRamo").value);
   return {
     id: document.getElementById("bitId").value,
     folio: document.getElementById("bitFolio").value,
@@ -835,9 +1047,10 @@ function getBitacoraPayload() {
     tramite: document.getElementById("bitTramite").value,
     estado: document.getElementById("bitEstado").value,
     responsable: document.getElementById("bitResponsable").value,
-    fechaEntradaCorreo: document.getElementById("bitEntrada").value,
+    otInterna,
+    ot_interna: otInterna,
     fechaEntrega: document.getElementById("bitEntrega").value,
-    fechaSalida: document.getElementById("bitSalida").value,
+    ramo,
     descripcion: document.getElementById("bitDescripcion").value,
     comentarios: document.getElementById("bitComentarios").value,
     aseguradora: document.getElementById("bitAseguradora").value,
@@ -853,6 +1066,64 @@ function getOperatorName() {
     }
   }
   return name || "Operador local";
+}
+
+function generateOTInterna() {
+  // Genera OT interna rastreable: OT-YYMMDD-XXXXX
+  // Ejemplo: OT-260603-00001
+  const now = new Date();
+  const year = String(now.getFullYear()).slice(-2);
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const timestamp = now.getTime();
+  const random = Math.floor(Math.random() * 100000).toString().padStart(5, "0");
+  return `OT-${year}${month}${day}-${random}`;
+}
+
+function inferRamoFromMonitorRow(row = {}) {
+  const source = normalizeText([
+    row.ramo,
+    row.rol,
+    row.producto,
+    row.tipoSolicitud,
+    row.workflow,
+  ].filter(Boolean).join(" "));
+  if (source.includes("gmm") || source.includes("gastos medicos")) return findRamoOptionValue("gmm");
+  if (source.includes("vida")) return findRamoOptionValue("vida");
+  if (source.includes("auto")) return findRamoOptionValue("auto");
+  if (source.includes("dano") || source.includes("da?o")) return findRamoOptionValue("dan");
+  return "";
+}
+
+function findRamoOptionValue(key) {
+  const select = document.getElementById("bitRamo");
+  const normalizedKey = normalizeText(key);
+  const options = Array.from(select?.options || []);
+  const option = options.find((item) => {
+    const value = normalizeText(`${item.value} ${item.textContent}`);
+    return item.value && value.includes(normalizedKey);
+  });
+  return option?.value || "";
+}
+
+function resolveRamoInputValue(value) {
+  const normalized = normalizeText(fixMojibakeText(value));
+  if (!normalized) return "";
+  if (normalized.includes("gmm") || normalized.includes("gastos medicos")) return findRamoOptionValue("gmm");
+  if (normalized.includes("vida")) return findRamoOptionValue("vida");
+  if (normalized.includes("auto")) return findRamoOptionValue("auto");
+  if (normalized.includes("dan") || normalized.includes("dano") || normalized.includes("da?o")) return findRamoOptionValue("dan");
+  return value;
+}
+
+function fixMojibakeText(value) {
+  return String(value || "")
+    .replace(/ÃƒÂ±|Ã±/g, "ñ")
+    .replace(/ÃƒÂ©|Ã©/g, "é")
+    .replace(/ÃƒÂ¡|Ã¡/g, "á")
+    .replace(/ÃƒÂ­|Ã­/g, "í")
+    .replace(/ÃƒÂ³|Ã³/g, "ó")
+    .replace(/ÃƒÂº|Ãº/g, "ú");
 }
 
 function askChangeReason(action) {
@@ -911,6 +1182,8 @@ function describeBitacoraSave(data) {
 function resetBitacoraForm() {
   document.getElementById("bitacoraForm").reset();
   document.getElementById("bitId").value = "";
+  document.getElementById("bitOTInterna").value = generateOTInterna();
+  document.getElementById("bitResponsable").value = currentUser?.displayName || "";
   document.getElementById("bitCancelEdit").classList.add("hidden");
   document.getElementById("bitSaveBtn").textContent = "Guardar";
 }
@@ -939,13 +1212,13 @@ function monitorRowToBitacoraEntry(row) {
     cliente: row.contratante || "",
     tramite: displayValue(row.tipoSolicitud) === "-" ? "" : titleCase(row.tipoSolicitud),
     estado: displayValue(row.estatus).toUpperCase() === "-" ? "PENDIENTE" : displayValue(row.estatus).toUpperCase(),
-    responsable: row.usuarioCreador || row.agente || "",
-    fechaEntradaCorreo: "",
+    responsable: row.usuarioCreador || "",
     fechaEntrega: normalizeDateForInput(row.fechaCompromiso),
-    fechaSalida: "",
     descripcion: [row.producto, row.guia && row.guia !== "-" ? `Guia ${row.guia}` : ""].filter(Boolean).join(" - "),
     comentarios: "",
     aseguradora: "GNP",
+    otInterna: generateOTInterna(),
+    ramo: inferRamoFromMonitorRow(row),
   };
 }
 
@@ -990,10 +1263,10 @@ function fillBitacoraForm(entry) {
   document.getElementById("bitCliente").value = entry.cliente || "";
   document.getElementById("bitTramite").value = entry.tramite || "";
   document.getElementById("bitEstado").value = entry.estado || "PENDIENTE";
-  document.getElementById("bitResponsable").value = entry.responsable || "";
-  document.getElementById("bitEntrada").value = entry.fechaEntradaCorreo || "";
+  document.getElementById("bitResponsable").value = entry.responsable || currentUser?.displayName || "";
+  document.getElementById("bitOTInterna").value = entry.otInterna || entry.ot_interna || generateOTInterna();
   document.getElementById("bitEntrega").value = entry.fechaEntrega || "";
-  document.getElementById("bitSalida").value = entry.fechaSalida || "";
+  document.getElementById("bitRamo").value = resolveRamoInputValue(entry.ramo);
   document.getElementById("bitDescripcion").value = entry.descripcion || "";
   document.getElementById("bitComentarios").value = entry.comentarios || "";
   document.getElementById("bitAseguradora").value = entry.aseguradora || "";
@@ -1051,14 +1324,7 @@ function sameDisplayValue(left, right) {
 function bitacoraComparisonRows(item) {
   const monitor = item.monitor || {};
   return [
-    { label: "Folio / OT", manual: item.folio, monitor: monitor.ot },
-    { label: "Poliza", manual: item.poliza, monitor: monitor.poliza },
-    { label: "Cliente", manual: item.cliente, monitor: monitor.contratante },
-    { label: "Tramite", manual: item.tramite, monitor: monitor.tipoSolicitud },
     { label: "Estado", manual: item.estado, monitor: monitor.estatus },
-    { label: "Responsable", manual: item.responsable, monitor: monitor.agente },
-    { label: "Entrega", manual: formatGnpDate(item.fechaEntrega), monitor: formatGnpDate(monitor.fechaCompromiso) },
-    { label: "Comentarios", manual: item.comentarios, monitor: "-" },
   ].map((row) => {
     const manual = displayValue(row.manual);
     const monitorValue = displayValue(row.monitor);
@@ -1084,6 +1350,8 @@ function historySnapshotItem(item) {
       ...item,
       ...selected.after,
       id: item.id,
+      ramo: selected.after.ramo || item.ramo || "",
+      otInterna: selected.after.otInterna || selected.after.ot_interna || item.otInterna || "",
       monitor: Object.prototype.hasOwnProperty.call(selected.after, "monitor") ? selected.after.monitor : item.monitor,
       matchBy: Object.prototype.hasOwnProperty.call(selected.after, "matchBy") ? selected.after.matchBy : item.matchBy,
       seguimiento: item.seguimiento,
@@ -1097,7 +1365,7 @@ function renderBitacoraDetailRow(item) {
   const row = document.createElement("tr");
   row.className = "bitacora-detail-row";
   const cell = document.createElement("td");
-  cell.colSpan = 14;
+  cell.colSpan = 15;
 
   const box = document.createElement("div");
   box.className = "bitacora-detail-box";
@@ -1151,6 +1419,46 @@ function renderBitacoraDetailRow(item) {
     comparison.appendChild(line);
   });
   box.appendChild(comparison);
+
+  // Mostrar datos completos de la Bitacora
+  const bitacoraDataBox = document.createElement("div");
+  bitacoraDataBox.className = "comparison-grid bitacora-data-box";
+  const bitacoraDataHeader = document.createElement("div");
+  bitacoraDataHeader.className = "comparison-row comparison-header";
+  const bitacoraHeaderLabel = document.createElement("span");
+  bitacoraHeaderLabel.textContent = "Datos de Bitacora";
+  const bitacoraHeaderValue = document.createElement("strong");
+  bitacoraHeaderValue.textContent = "Valor";
+  bitacoraDataHeader.append(bitacoraHeaderLabel, bitacoraHeaderValue);
+  bitacoraDataBox.appendChild(bitacoraDataHeader);
+
+  const bitacoraFields = [
+    { label: "Folio / OT", value: comparisonItem.folio },
+    { label: "Póliza", value: comparisonItem.poliza },
+    { label: "Cliente", value: comparisonItem.cliente },
+    { label: "Trámite", value: comparisonItem.tramite },
+    { label: "Responsable", value: comparisonItem.responsable },
+    { label: "Capturado por", value: comparisonItem.createdByName },
+    { label: "Entrega", value: formatGnpDate(comparisonItem.fechaEntrega) },
+    { label: "Ramo", value: comparisonItem.ramo },
+    { label: "OT Interna", value: comparisonItem.otInterna || comparisonItem.ot_interna },
+    { label: "Descripción", value: comparisonItem.descripcion },
+    { label: "Comentarios", value: comparisonItem.comentarios },
+    { label: "Aseguradora", value: comparisonItem.aseguradora },
+  ];
+
+  bitacoraFields.forEach((field) => {
+    const fieldLine = document.createElement("div");
+    fieldLine.className = "comparison-row";
+    const fieldLabel = document.createElement("span");
+    fieldLabel.textContent = field.label;
+    const fieldValue = document.createElement("strong");
+    fieldValue.textContent = displayValue(field.value);
+    fieldLine.append(fieldLabel, fieldValue);
+    bitacoraDataBox.appendChild(fieldLine);
+  });
+
+  box.appendChild(bitacoraDataBox);
 
   if (item.duplicateItems?.length) {
     const duplicates = document.createElement("div");
@@ -1278,6 +1586,7 @@ function renderBitacora(data = bitacoraData) {
       item.tramite,
       item.estado,
       item.responsable,
+      item.createdByName,
       item.comentarios,
       item.monitor && item.monitor.ot,
       item.monitor && item.monitor.poliza,
@@ -1291,7 +1600,7 @@ function renderBitacora(data = bitacoraData) {
   if (!items.length) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 14;
+    cell.colSpan = 15;
     cell.textContent = "Sin registros de bitacora para mostrar.";
     row.appendChild(cell);
     tbody.appendChild(row);
@@ -1324,6 +1633,7 @@ function renderBitacora(data = bitacoraData) {
     appendCell(row, item.estado);
     appendCell(row, item.monitor ? item.monitor.estatus : "Sin captura");
     appendCell(row, item.responsable);
+    appendCell(row, item.createdByName);
     appendCell(row, formatGnpDate(item.fechaEntrega || (item.monitor && item.monitor.fechaCompromiso)));
     appendCell(row, item.comentarios);
     appendCell(row, `v${item.version || 1} - ${fmtDate(item.updatedAt)}`);
@@ -1476,6 +1786,11 @@ async function saveBitacoraEntry(event) {
     showBitacoraNotice("Captura folio/OT o poliza para poder comparar con el monitor.", "error");
     return;
   }
+  if (!payload.ramo) {
+    showBitacoraNotice("Selecciona el ramo correcto antes de guardar.", "error");
+    document.getElementById("bitRamo")?.focus();
+    return;
+  }
 
   const saveButton = document.getElementById("bitSaveBtn");
   const previousSaveText = saveButton ? saveButton.textContent : "";
@@ -1587,6 +1902,322 @@ async function importBitacoraExcel(event) {
     showBitacoraNotice(`Excel importado. Nuevos: ${stats.inserted || 0}. Actualizados: ${stats.updated || 0}.`);
   } catch (error) {
     showBitacoraNotice(`No se importo el Excel: ${error.message}`, "error");
+  }
+}
+
+function showSiniestrosNotice(message, type = "success") {
+  const notice = document.getElementById("siniestrosNotice");
+  if (!notice) return;
+  notice.textContent = message;
+  notice.classList.remove("hidden", "error");
+  notice.classList.toggle("error", type === "error");
+}
+
+function renderSiniestros(data = siniestrosData) {
+  siniestrosData = data || siniestrosData;
+  const results = Array.isArray(siniestrosData.results) ? siniestrosData.results : [];
+  const succeeded = results.filter((result) => result.ok).length;
+  const failed = results.filter((result) => !result.ok).length;
+  document.getElementById("sinTotal").textContent = String(siniestrosData.total || 0);
+  document.getElementById("sinCompleted").textContent = String(siniestrosData.completed || 0);
+  document.getElementById("sinSuccess").textContent = String(succeeded);
+  document.getElementById("sinFailed").textContent = String(failed);
+  document.getElementById("sinSearchBtn").disabled = Boolean(siniestrosData.busy);
+  document.getElementById("sinExcelInput").disabled = Boolean(siniestrosData.busy);
+
+  const body = document.getElementById("siniestrosTbody");
+  clearElement(body);
+  if (!results.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 5;
+    cell.className = "muted";
+    cell.textContent = "Aun no hay consultas solicitadas.";
+    row.appendChild(cell);
+    body.appendChild(row);
+    return;
+  }
+
+  results.forEach((result) => {
+    const row = document.createElement("tr");
+    appendCell(row, result.folio, { strong: true });
+    const status = appendCell(row, result.status === "pdf" ? "PDF" : "Error");
+    status.className = result.ok ? "result-ok" : "result-error";
+    appendCell(row, result.message);
+    const documentCell = document.createElement("td");
+    if (result.pdfId) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn-secondary siniestros-pdf-btn";
+      button.textContent = "Ver PDF";
+      button.addEventListener("click", () => openSiniestroPdf(result.pdfId));
+      documentCell.appendChild(button);
+    } else {
+      documentCell.textContent = "-";
+    }
+    row.appendChild(documentCell);
+    appendCell(row, formatClock(result.at));
+    body.appendChild(row);
+  });
+}
+
+async function openSiniestroPdf(pdfId) {
+  const target = window.open("", "_blank");
+  try {
+    const blob = await apiBlob(`/api/siniestros/pdf/${encodeURIComponent(pdfId)}`);
+    const url = URL.createObjectURL(blob);
+    if (target) {
+      target.location.href = url;
+    } else {
+      window.open(url, "_blank");
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) {
+    if (target) target.close();
+    showSiniestrosNotice(`No se pudo abrir el PDF: ${error.message}`, "error");
+  }
+}
+
+async function searchSiniestro(event) {
+  event.preventDefault();
+  const folio = document.getElementById("sinFolio").value.trim();
+  const ramo = document.getElementById("sinRamo").value;
+  const otInterna = document.getElementById("sinOTInterna");
+  
+  if (!folio) return;
+  if (!ramo) {
+    showSiniestrosNotice("Selecciona un ramo para continuar", "error");
+    return;
+  }
+  
+  // Generar OT interna si está vacía
+  if (!otInterna.value) {
+    otInterna.value = generateOTInterna();
+  }
+  
+  try {
+    const result = await apiJson("/api/siniestros/search", {
+      method: "POST",
+      body: JSON.stringify({ 
+        folio,
+        ramo,
+        otInterna: otInterna.value
+      }),
+    });
+    showSiniestrosNotice(`Consulta iniciada para ${result.accepted || 1} folio (OT: ${otInterna.value}).`);
+    document.getElementById("sinFolio").value = "";
+    // No limpiar sinOTInterna para mantenerla visible
+    await fetchStatus();
+  } catch (error) {
+    showSiniestrosNotice(`No se inicio la consulta: ${error.message}`, "error");
+  }
+}
+
+async function importSiniestrosExcel(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+  try {
+    const buffer = await file.arrayBuffer();
+    const result = await apiJson("/api/siniestros/import-excel", {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: buffer,
+    });
+    showSiniestrosNotice(`Excel recibido. Se consultaran ${result.accepted} folio(s).`);
+    await fetchStatus();
+  } catch (error) {
+    showSiniestrosNotice(`No se proceso el Excel: ${error.message}`, "error");
+  }
+}
+
+function showAxaSiniestrosNotice(message, type = "success") {
+  const notice = document.getElementById("axaSiniestrosNotice");
+  if (!notice) return;
+  notice.textContent = message;
+  notice.classList.remove("hidden", "error");
+  notice.classList.toggle("error", type === "error");
+}
+
+function renderAxaSiniestros(data = axaSiniestrosData) {
+  axaSiniestrosData = data || axaSiniestrosData;
+  const results = Array.isArray(axaSiniestrosData.results) ? axaSiniestrosData.results : [];
+  const succeeded = results.filter((result) => result.ok).length;
+  const failed = results.filter((result) => !result.ok).length;
+  const setText = (id, value) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = String(value);
+  };
+  setText("axaSinTotal", axaSiniestrosData.total || 0);
+  setText("axaSinCompleted", axaSiniestrosData.completed || 0);
+  setText("axaSinSuccess", succeeded);
+  setText("axaSinFailed", failed);
+  const button = document.getElementById("axaSinRunBtn");
+  if (button) {
+    button.disabled = Boolean(axaSiniestrosData.busy);
+    button.textContent = axaSiniestrosData.busy ? "Consultando..." : "Consultar en AXA";
+  }
+
+  const body = document.getElementById("axaSiniestrosTbody");
+  if (!body) return;
+  clearElement(body);
+  if (!results.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 7;
+    cell.className = "muted";
+    cell.textContent = "Aun no hay consultas AXA solicitadas.";
+    row.appendChild(cell);
+    body.appendChild(row);
+    return;
+  }
+
+  results.forEach((result) => {
+    const row = document.createElement("tr");
+    appendCell(row, result.folio, { strong: true });
+    const status = appendCell(row, result.ok ? "Consultado" : "Error");
+    status.className = result.ok ? "result-ok" : "result-error";
+    appendCell(row, result.message);
+    appendCell(row, result.details?.siniestro || "-");
+    appendCell(row, result.details?.estadoPago || result.details?.etapaActual || "-");
+    const actionsCell = document.createElement("td");
+    if (result.details || result.screenshotId) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn-secondary siniestros-pdf-btn";
+      button.textContent = "Ver detalle";
+      button.addEventListener("click", () => openAxaSiniestrosResult(result));
+      actionsCell.appendChild(button);
+    } else {
+      actionsCell.textContent = "-";
+    }
+    row.appendChild(actionsCell);
+    appendCell(row, formatClock(result.at));
+    body.appendChild(row);
+  });
+}
+
+async function openAxaSiniestrosResult(result) {
+  const modal = document.getElementById("axaSiniestrosModal");
+  const title = document.getElementById("axaSiniestrosModalTitle");
+  const subtitle = document.getElementById("axaSiniestrosModalSubtitle");
+  const body = document.getElementById("axaSiniestrosModalBody");
+  if (!modal || !title || !subtitle || !body) return;
+
+  title.textContent = `Folio AXA ${displayValue(result.folio)}`;
+  subtitle.textContent = result.message || "Resultado de Consulta Express";
+  clearElement(body);
+
+  const details = result.details || {};
+  const grid = document.createElement("div");
+  grid.className = "axa-result-grid";
+  [
+    ["Siniestro", details.siniestro],
+    ["Fecha del siniestro", details.fechaSiniestro],
+    ["Estado", details.estadoPago],
+    ["Tramite", details.tipoTramite],
+    ["Folio respuesta", details.folio],
+    ["Fecha solicitud", details.fechaSolicitud],
+    ["Compromiso respuesta", details.compromisoRespuesta],
+    ["Etapa actual", details.etapaActual],
+  ].forEach(([label, value]) => {
+    const item = document.createElement("div");
+    item.className = "axa-result-field";
+    const labelEl = document.createElement("span");
+    labelEl.textContent = label;
+    const valueEl = document.createElement("strong");
+    valueEl.textContent = displayValue(value);
+    item.append(labelEl, valueEl);
+    grid.appendChild(item);
+  });
+  body.appendChild(grid);
+
+  if (Array.isArray(details.etapas) && details.etapas.length) {
+    const stages = document.createElement("div");
+    stages.className = "axa-result-stages";
+    details.etapas.forEach((stage) => {
+      const pill = document.createElement("span");
+      pill.textContent = stage;
+      if (stage === details.etapaActual) pill.classList.add("active");
+      stages.appendChild(pill);
+    });
+    body.appendChild(stages);
+  }
+
+  if (result.screenshotId) {
+    const imageWrap = document.createElement("div");
+    imageWrap.className = "axa-result-shot";
+    imageWrap.textContent = "Cargando captura...";
+    body.appendChild(imageWrap);
+    try {
+      const blob = await apiBlob(`/api/axa/siniestros/screenshot/${encodeURIComponent(result.screenshotId)}`);
+      const url = URL.createObjectURL(blob);
+      clearElement(imageWrap);
+      const image = document.createElement("img");
+      image.src = url;
+      image.alt = `Captura AXA ${result.folio}`;
+      image.onload = () => setTimeout(() => URL.revokeObjectURL(url), 60000);
+      imageWrap.appendChild(image);
+    } catch (error) {
+      imageWrap.textContent = `No se pudo cargar la captura: ${error.message}`;
+    }
+  }
+
+  modal.classList.remove("hidden");
+}
+
+function closeAxaSiniestrosResult() {
+  document.getElementById("axaSiniestrosModal")?.classList.add("hidden");
+}
+
+function parseFoliosInput(value) {
+  return String(value || "")
+    .split(/[\s,;]+/)
+    .map((folio) => folio.trim())
+    .filter(Boolean)
+    .filter((folio, index, all) => all.indexOf(folio) === index);
+}
+
+async function searchAxaSiniestro(event) {
+  event.preventDefault();
+  const field = document.getElementById("axaSinFolios");
+  const folios = parseFoliosInput(field?.value);
+  if (!folios.length) return;
+
+  try {
+    const result = await apiJson("/api/axa/siniestros/search", {
+      method: "POST",
+      body: JSON.stringify({ folios }),
+    });
+    if (result.axaSiniestros) {
+      renderAxaSiniestros(result.axaSiniestros);
+    }
+    showAxaSiniestrosNotice(`Consulta AXA iniciada para ${result.accepted || 1} folio(s).`);
+    if (field) field.value = "";
+    await fetchStatus();
+  } catch (error) {
+    showAxaSiniestrosNotice(`No se inicio AXA: ${error.message}`, "error");
+  }
+}
+
+async function importAxaSiniestrosExcel(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+  try {
+    const buffer = await file.arrayBuffer();
+    const result = await apiJson("/api/axa/siniestros/import-excel", {
+      method: "POST",
+      headers: { "Content-Type": "application/octet-stream" },
+      body: buffer,
+    });
+    if (result.axaSiniestros) {
+      renderAxaSiniestros(result.axaSiniestros);
+    }
+    showAxaSiniestrosNotice(`Excel AXA recibido. Se consultaran ${result.accepted} folio(s).`);
+    await fetchStatus();
+  } catch (error) {
+    showAxaSiniestrosNotice(`No se proceso el Excel AXA: ${error.message}`, "error");
   }
 }
 
@@ -1923,6 +2554,9 @@ function showLoading(show, mode) {
 function renderStatus(data) {
   lastStatusData = data;
   postTokenRequired = Boolean(data.auth && data.auth.postTokenRequired);
+  if (data.auth && data.auth.user) {
+    setCurrentUser(data.auth.user);
+  }
   applyTvConfig(data.tv || {});
 
   const summary =
@@ -1931,9 +2565,9 @@ function renderStatus(data) {
     (diffData && diffData.summary) ||
     {};
   const badge = document.getElementById("statusBadge");
-  badge.className = `status-badge ${data.mode || "idle"}`;
+  badge.className = `status-indicator ${data.mode || "idle"}`;
 
-  const isLoading = ["querying", "booting", "checking_session", "auto_login"].includes(data.mode);
+  const isLoading = ["querying", "booting", "checking_session", "auto_login", "siniestros"].includes(data.mode);
   
   if (isLoading) {
     showLoading(true, data.mode);
@@ -1986,6 +2620,15 @@ function renderStatus(data) {
   if (data.bitacora) {
     renderBitacora(data.bitacora);
   }
+  if (data.siniestros) {
+    renderSiniestros(data.siniestros);
+  }
+  if (data.axaSiniestros) {
+    renderAxaSiniestros(data.axaSiniestros);
+  }
+  if (data.axa) {
+    renderAxa(data.axa);
+  }
   
   if (data.dataVersion) {
     statusVersion = data.dataVersion;
@@ -2004,6 +2647,77 @@ function renderStatus(data) {
   }
 }
 
+function setCurrentUser(user) {
+  currentUser = user || null;
+  document.body.classList.toggle("is-admin", currentUser?.role === "admin");
+  const overlay = document.getElementById("loginOverlay");
+  const userPill = document.getElementById("userPill");
+  const userName = document.getElementById("userName");
+  const adminButton = document.getElementById("adminViewBtn");
+  const importInput = document.getElementById("bitExcelInput");
+  overlay?.classList.toggle("hidden", Boolean(currentUser));
+  userPill?.classList.toggle("hidden", !currentUser);
+  adminButton?.classList.toggle("hidden", currentUser?.role !== "admin");
+  if (importInput) {
+    importInput.closest("label")?.classList.toggle("hidden", currentUser?.role !== "admin");
+  }
+  if (userName) {
+    userName.textContent = currentUser ? `${currentUser.displayName} (${formatRole(currentUser.role)})` : "-";
+  }
+  if (currentUser?.role !== "admin" && activeMainView === "admin") {
+    setMainView("monitor");
+  }
+}
+
+function showLogin(message = "") {
+  const overlay = document.getElementById("loginOverlay");
+  const error = document.getElementById("loginError");
+  overlay?.classList.remove("hidden");
+  if (error) {
+    error.textContent = message;
+    error.classList.toggle("hidden", !message);
+  }
+}
+
+async function checkAuth() {
+  try {
+    const data = await apiJson("/api/auth/me", { skipAuthPrompt: true });
+    setCurrentUser(data.user);
+    return Boolean(data.user);
+  } catch {
+    setCurrentUser(null);
+    showLogin();
+    return false;
+  }
+}
+
+async function submitLogin(event) {
+  event.preventDefault();
+  const username = document.getElementById("loginUsername").value.trim();
+  const password = document.getElementById("loginPassword").value;
+  try {
+    const data = await apiJson("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+      skipAuthPrompt: true,
+    });
+    setCurrentUser(data.user);
+    document.getElementById("loginPassword").value = "";
+    await fetchFullStatus();
+    startStatusPolling();
+  } catch (error) {
+    showLogin(error.message);
+  }
+}
+
+async function logout() {
+  try {
+    await apiJson("/api/auth/logout", { method: "POST", skipAuthPrompt: true });
+  } catch {}
+  setCurrentUser(null);
+  showLogin();
+}
+
 async function fetchStatus() {
   try {
     const query = statusVersion && allData.length ? `?since=${encodeURIComponent(statusVersion)}` : "";
@@ -2018,6 +2732,30 @@ async function fetchFullStatus() {
     renderStatus(await apiJson("/api/status?full=1"));
   } catch (err) {
     console.error("Error fetching full status:", err);
+  }
+}
+
+async function runAxaNow() {
+  const button = document.getElementById("axaRunBtn");
+  try {
+    if (button) {
+      button.disabled = true;
+    }
+    const data = await apiPost("/api/axa/run-now");
+    if (data.axa) renderAxa(data.axa);
+  } catch (error) {
+    if (error?.message) {
+      renderAxa({
+        ...axaState,
+        mode: "pending_config",
+        message: "Flujo AXA pendiente",
+        error: error.message,
+      });
+    }
+  } finally {
+    if (button) {
+      button.disabled = false;
+    }
   }
 }
 
@@ -2046,13 +2784,13 @@ async function apiBlob(path) {
 
   let response = await fetch(path, { headers });
   if (response.status === 401) {
-    const nextToken = promptForMonitorToken();
-    if (!nextToken) {
-      throw new Error("Token local requerido.");
-    }
-    response = await fetch(path, { headers: { "X-Monitor-Token": nextToken } });
+    showLogin("Inicia sesion para continuar.");
+    throw new Error("Sesion requerida.");
   }
-
+  if (response.status === 403) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.message || "No tienes permisos.");
+  }
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     throw new Error(payload.message || `No se pudo obtener la vista remota. HTTP ${response.status}`);
@@ -2073,20 +2811,12 @@ async function apiJson(path, options = {}) {
 
   let response = await fetch(path, { ...options, headers: { ...headers, ...optionHeaders } });
   if (response.status === 401) {
-    const nextToken = promptForMonitorToken();
-    if (!nextToken) {
-      throw new Error("Token local requerido.");
+    if (options.skipAuthPrompt) {
+      throw new Error("Sesion requerida.");
     }
-    response = await fetch(path, {
-      ...options,
-      headers: {
-        ...headers,
-        ...optionHeaders,
-        "X-Monitor-Token": nextToken,
-      },
-    });
+    showLogin("Inicia sesion para continuar.");
+    throw new Error("Sesion requerida.");
   }
-
   const responseText = await response.text().catch(() => "");
   let payload = {};
   try {
@@ -2108,9 +2838,473 @@ async function apiJson(path, options = {}) {
 
 function openBitacoraExcel(event) {
   event.preventDefault();
-  const token = getMonitorToken() || promptForMonitorToken();
+  const token = getMonitorToken();
   const query = token ? `?monitorToken=${encodeURIComponent(token)}` : "";
   window.location.href = `/api/bitacora/excel${query}`;
+}
+
+function getAdminFilterValues() {
+  return {
+    userId: document.getElementById("adminMetricUser")?.value || "",
+    status: document.getElementById("adminMetricStatus")?.value || "",
+    risk: document.getElementById("adminMetricRisk")?.value || "",
+    dateField: document.getElementById("adminMetricDateField")?.value || "delivery",
+    dateFrom: document.getElementById("adminMetricFrom")?.value || "",
+    dateTo: document.getElementById("adminMetricTo")?.value || "",
+  };
+}
+
+function buildAdminMetricsQuery() {
+  const params = new URLSearchParams();
+  Object.entries(getAdminFilterValues()).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+  return params.toString();
+}
+
+function setSelectOptions(select, options, getValue, getLabel, emptyLabel = "Todos") {
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = "";
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = emptyLabel;
+  select.appendChild(empty);
+  options.forEach((option) => {
+    const item = document.createElement("option");
+    item.value = getValue(option);
+    item.textContent = getLabel(option);
+    select.appendChild(item);
+  });
+  select.value = [...select.options].some((option) => option.value === current) ? current : "";
+}
+
+function riskLabel(value) {
+  const labels = {
+    overdue: "Vencida",
+    no_followup: "Sin seguimiento",
+    open: "Abierta",
+    closed: "Cerrada",
+    archived: "Archivada",
+  };
+  return labels[value] || "-";
+}
+
+function setAdminTab(tab) {
+  activeAdminTab = ["users", "metrics", "cases"].includes(tab) ? tab : "users";
+  document.querySelectorAll("[data-admin-tab]").forEach((button) => {
+    const isActive = button.dataset.adminTab === activeAdminTab;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+  [
+    ["users", "adminUsersPane"],
+    ["metrics", "adminMetricsPane"],
+    ["cases", "adminCasesPane"],
+  ].forEach(([name, id]) => {
+    document.getElementById(id)?.classList.toggle("active", name === activeAdminTab);
+  });
+}
+
+function renderAdminFilters(data = adminMetricsState) {
+  setSelectOptions(
+    document.getElementById("adminMetricUser"),
+    data.users || [],
+    (user) => user.id,
+    (user) => `${user.displayName} (${formatRole(user.role)})`
+  );
+  setSelectOptions(
+    document.getElementById("adminMetricStatus"),
+    data.statusOptions || [],
+    (status) => status,
+    (status) => status
+  );
+}
+
+function renderAdminCases(cases = adminMetricsState.cases || []) {
+  const tbody = document.getElementById("adminCasesTbody");
+  const count = document.getElementById("adminDetailCount");
+  const title = document.getElementById("adminDetailTitle");
+  const subtitle = document.getElementById("adminDetailSubtitle");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  const visibleCases = selectedAdminUserId
+    ? cases.filter((item) => item.executiveId === selectedAdminUserId)
+    : cases;
+  if (count) count.textContent = `${visibleCases.length} caso${visibleCases.length === 1 ? "" : "s"}`;
+  const selectedMetric = adminMetricsState.metrics.find((row) => row.user?.id === selectedAdminUserId);
+  if (title) title.textContent = selectedMetric ? `Detalle de ${selectedMetric.user.displayName}` : "Detalle de casos";
+  if (subtitle) subtitle.textContent = selectedMetric ? "Casos filtrados para el ejecutivo seleccionado." : "Selecciona un ejecutivo o usa los filtros.";
+
+  if (!visibleCases.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 11;
+    cell.className = "muted";
+    cell.textContent = "No hay casos con los filtros actuales.";
+    row.appendChild(cell);
+    tbody.appendChild(row);
+    return;
+  }
+
+  visibleCases.forEach((item) => {
+    const row = document.createElement("tr");
+    [
+      displayValue(item.executive),
+      displayValue(item.folio),
+      displayValue(item.poliza),
+      displayValue(item.cliente),
+      displayValue(item.estado),
+      displayValue(item.fechaEntrega),
+      riskLabel(item.risk),
+      displayValue(item.lastComment),
+      fmtDate(item.lastFollowupAt),
+      item.updates || 0,
+    ].forEach((value) => {
+      const td = document.createElement("td");
+      td.textContent = String(value);
+      row.appendChild(td);
+    });
+    const actions = document.createElement("td");
+    actions.className = "admin-case-actions";
+    const openButton = document.createElement("button");
+    openButton.className = "btn-secondary admin-mini-btn";
+    openButton.type = "button";
+    openButton.textContent = "Abrir";
+    openButton.addEventListener("click", () => {
+      void openAdminCaseInBitacora(item);
+    });
+    actions.appendChild(openButton);
+    row.appendChild(actions);
+    tbody.appendChild(row);
+  });
+}
+
+function renderAdminUsers(users = adminMetricsState.users || []) {
+  const tbody = document.getElementById("adminUsersTbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  if (!users.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 6;
+    cell.className = "muted";
+    cell.textContent = "No hay usuarios registrados.";
+    row.appendChild(cell);
+    tbody.appendChild(row);
+    return;
+  }
+
+  users.forEach((user) => {
+    const row = document.createElement("tr");
+    [
+      displayValue(user.username),
+      displayValue(user.displayName),
+      formatRole(user.role),
+      user.active ? "Activo" : "Inactivo",
+      fmtDate(user.updatedAt || user.createdAt),
+    ].forEach((value) => {
+      const td = document.createElement("td");
+      td.textContent = String(value);
+      row.appendChild(td);
+    });
+
+    const actions = document.createElement("td");
+    actions.className = "admin-user-actions";
+    const editButton = document.createElement("button");
+    editButton.className = "btn-secondary admin-mini-btn";
+    editButton.type = "button";
+    editButton.textContent = "Editar";
+    editButton.addEventListener("click", () => startAdminUserEdit(user));
+
+    const activeButton = document.createElement("button");
+    activeButton.className = user.active ? "btn-ghost admin-mini-btn danger" : "btn-secondary admin-mini-btn";
+    activeButton.type = "button";
+    activeButton.textContent = user.active ? "Desactivar" : "Reactivar";
+    activeButton.disabled = user.active && user.id === currentUser?.id;
+    activeButton.addEventListener("click", () => {
+      void toggleAdminUserActive(user);
+    });
+    actions.append(editButton, activeButton);
+    row.appendChild(actions);
+    tbody.appendChild(row);
+  });
+}
+
+function renderAdminMetrics(payload = {}) {
+  const metrics = Array.isArray(payload) ? payload : payload.metrics || [];
+  adminMetricsState = {
+    metrics,
+    cases: Array.isArray(payload.cases) ? payload.cases : metrics.flatMap((row) => row.cases || []),
+    users: payload.users || adminMetricsState.users || [],
+    statusOptions: payload.statusOptions || adminMetricsState.statusOptions || [],
+  };
+  renderAdminFilters(adminMetricsState);
+  renderAdminUsers(adminMetricsState.users);
+  const totals = metrics.reduce(
+    (acc, row) => {
+      acc.total += row.total || 0;
+      acc.completed += row.completed || 0;
+      acc.overdue += row.overdue || 0;
+      acc.updates += row.updates || 0;
+      acc.active += row.active || 0;
+      acc.withoutFollowup += row.withoutFollowup || 0;
+      return acc;
+    },
+    { total: 0, completed: 0, overdue: 0, updates: 0, active: 0, withoutFollowup: 0 }
+  );
+  const effectiveness = totals.total ? Math.round((totals.completed / totals.total) * 1000) / 10 : 0;
+  const grid = document.getElementById("adminMetricsGrid");
+  if (grid) {
+    grid.innerHTML = "";
+    [
+      ["Total bitacoras", totals.total],
+      ["Activas", totals.active],
+      ["Terminadas", totals.completed],
+      ["Vencidas", totals.overdue],
+      ["Sin seguimiento", totals.withoutFollowup],
+      ["Efectividad", `${effectiveness}%`],
+    ].forEach(([label, value]) => {
+      const card = document.createElement("div");
+      card.className = "summary-card";
+      card.innerHTML = `<strong>${value}</strong><span>${label}</span>`;
+      grid.appendChild(card);
+    });
+  }
+
+  const tbody = document.getElementById("adminMetricsTbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  metrics.forEach((row) => {
+    const tr = document.createElement("tr");
+    tr.className = "admin-metric-row";
+    tr.tabIndex = 0;
+    tr.addEventListener("click", () => {
+      selectedAdminUserId = selectedAdminUserId === row.user?.id ? "" : row.user?.id || "";
+      const userFilter = document.getElementById("adminMetricUser");
+      if (userFilter) userFilter.value = selectedAdminUserId;
+      renderAdminMetrics(adminMetricsState);
+      setAdminTab("cases");
+    });
+    [
+      displayValue(row.user?.displayName),
+      formatRole(row.user?.role),
+      row.total || 0,
+      row.active || 0,
+      row.completed || 0,
+      row.overdue || 0,
+      row.withoutFollowup || 0,
+      row.updates || 0,
+      row.avgResolutionDays || 0,
+      `${row.effectivenessRate || 0}%`,
+    ].forEach((value) => {
+      const td = document.createElement("td");
+      td.textContent = String(value);
+      tr.appendChild(td);
+    });
+    tr.classList.toggle("active", selectedAdminUserId === row.user?.id);
+    tbody.appendChild(tr);
+  });
+  renderAdminCases(adminMetricsState.cases);
+}
+
+async function openAdminCaseInBitacora(caseItem) {
+  let item = findBitacoraItemById(caseItem.id);
+  if (!item) {
+    await fetchFullStatus();
+    item = findBitacoraItemById(caseItem.id);
+  }
+  if (!item) {
+    showAdminNotice("No encontre el caso en la bitacora actual.", "error");
+    return;
+  }
+  fillBitacoraForm(item);
+  setMainView("bitacora");
+  expandedBitacoraDetailId = null;
+  expandedBitacoraId = null;
+  await toggleBitacoraDetail(item.id);
+  showBitacoraNotice("Caso abierto desde Admin.");
+}
+
+async function refreshAdminMetrics() {
+  if (currentUser?.role !== "admin") return;
+  try {
+    const query = buildAdminMetricsQuery();
+    const data = await apiJson(`/api/admin/metrics${query ? `?${query}` : ""}`);
+    renderAdminMetrics(data);
+  } catch (error) {
+    console.error("Error loading admin metrics:", error);
+  }
+}
+
+function showAdminNotice(message, type = "success") {
+  const notice = document.getElementById("adminNotice");
+  if (!notice) return;
+  notice.textContent = message;
+  notice.classList.remove("hidden", "error");
+  notice.classList.toggle("error", type === "error");
+}
+
+async function createAdminUser(event) {
+  event.preventDefault();
+  const form = document.getElementById("adminUserForm");
+  const editId = document.getElementById("adminEditUserId")?.value || "";
+  const username = document.getElementById("adminUsername").value.trim();
+  const password = document.getElementById("adminPassword").value;
+  try {
+    const payload = {
+      username,
+      displayName: document.getElementById("adminDisplayName").value.trim(),
+      role: document.getElementById("adminRole").value,
+    };
+    if (password) payload.password = password;
+
+    if (editId) {
+      const data = await apiJson(`/api/users/${encodeURIComponent(editId)}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      adminMetricsState.users = data.users || adminMetricsState.users;
+      resetAdminUserForm();
+      showAdminNotice("Usuario actualizado.");
+      await refreshAdminMetrics();
+      return;
+    }
+
+    payload.password = password;
+    await apiJson("/api/users", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const panel = document.getElementById("adminCredentialsPanel");
+    const createdUsername = document.getElementById("createdUsername");
+    const createdPassword = document.getElementById("createdPassword");
+    if (createdUsername) createdUsername.textContent = username;
+    if (createdPassword) createdPassword.textContent = password;
+    panel?.classList.remove("hidden");
+    if (form) {
+      form.reset();
+    }
+    showAdminNotice("Usuario creado.");
+    await refreshAdminMetrics();
+  } catch (error) {
+    showAdminNotice(error.message, "error");
+  }
+}
+
+function resetAdminUserForm() {
+  const form = document.getElementById("adminUserForm");
+  const editId = document.getElementById("adminEditUserId");
+  const username = document.getElementById("adminUsername");
+  const password = document.getElementById("adminPassword");
+  const submit = document.getElementById("adminUserSubmitBtn");
+  const cancel = document.getElementById("adminCancelUserEditBtn");
+  form?.reset();
+  if (editId) editId.value = "";
+  if (username) username.disabled = false;
+  if (password) {
+    password.required = true;
+    password.placeholder = "";
+  }
+  if (submit) submit.textContent = "Crear usuario";
+  cancel?.classList.add("hidden");
+}
+
+function startAdminUserEdit(user) {
+  const editId = document.getElementById("adminEditUserId");
+  const username = document.getElementById("adminUsername");
+  const displayName = document.getElementById("adminDisplayName");
+  const role = document.getElementById("adminRole");
+  const password = document.getElementById("adminPassword");
+  const submit = document.getElementById("adminUserSubmitBtn");
+  const cancel = document.getElementById("adminCancelUserEditBtn");
+  if (editId) editId.value = user.id || "";
+  if (username) {
+    username.value = user.username || "";
+    username.disabled = true;
+  }
+  if (displayName) displayName.value = user.displayName || "";
+  if (role) role.value = user.role || "executive";
+  if (password) {
+    password.value = "";
+    password.required = false;
+    password.placeholder = "Dejar vacia para no cambiar";
+  }
+  if (submit) submit.textContent = "Guardar cambios";
+  cancel?.classList.remove("hidden");
+  document.getElementById("adminCredentialsPanel")?.classList.add("hidden");
+}
+
+async function toggleAdminUserActive(user) {
+  if (user.active && user.id === currentUser?.id) {
+    showAdminNotice("No puedes desactivar tu propio usuario.", "error");
+    return;
+  }
+  try {
+    const action = user.active ? "deactivate" : "reactivate";
+    const data = await apiJson(`/api/users/${encodeURIComponent(user.id)}/${action}`, { method: "POST" });
+    adminMetricsState.users = data.users || adminMetricsState.users;
+    renderAdminUsers(adminMetricsState.users);
+    showAdminNotice(user.active ? "Usuario desactivado." : "Usuario reactivado.");
+    await refreshAdminMetrics();
+  } catch (error) {
+    showAdminNotice(error.message, "error");
+  }
+}
+
+function clearAdminFilters() {
+  ["adminMetricUser", "adminMetricStatus", "adminMetricRisk", "adminMetricFrom", "adminMetricTo"].forEach((id) => {
+    const element = document.getElementById(id);
+    if (element) element.value = "";
+  });
+  const dateField = document.getElementById("adminMetricDateField");
+  if (dateField) dateField.value = "delivery";
+  selectedAdminUserId = "";
+  void refreshAdminMetrics();
+}
+
+function exportAdminMetricsCsv() {
+  const rows = [
+    ["Ejecutivo", "Rol", "Total", "Activas", "Terminadas", "Vencidas", "Sin seguimiento", "Actualizaciones", "Resolucion promedio", "Efectividad"],
+    ...adminMetricsState.metrics.map((row) => [
+      row.user?.displayName || "",
+      formatRole(row.user?.role),
+      row.total || 0,
+      row.active || 0,
+      row.completed || 0,
+      row.overdue || 0,
+      row.withoutFollowup || 0,
+      row.updates || 0,
+      row.avgResolutionDays || 0,
+      `${row.effectivenessRate || 0}%`,
+    ]),
+    [],
+    ["Detalle"],
+    ["Ejecutivo", "Folio", "Poliza", "Cliente", "Estado", "Entrega", "Riesgo", "Ultimo comentario", "Ultimo seguimiento", "Seguimientos"],
+    ...adminMetricsState.cases.map((item) => [
+      item.executive || "",
+      item.folio || "",
+      item.poliza || "",
+      item.cliente || "",
+      item.estado || "",
+      item.fechaEntrega || "",
+      riskLabel(item.risk),
+      item.lastComment || "",
+      fmtDate(item.lastFollowupAt),
+      item.updates || 0,
+    ]),
+  ];
+  const csv = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `metricas-admin-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 async function runNow() {
@@ -2348,10 +3542,49 @@ document.getElementById("bitDateTo").addEventListener("change", () => renderBita
 document.getElementById("bitExcelInput").addEventListener("change", importBitacoraExcel);
 document.getElementById("bitExcelLink").addEventListener("click", openBitacoraExcel);
 document.getElementById("bitMaximizeBtn").addEventListener("click", toggleBitacoraMaximized);
+document.getElementById("siniestrosForm").addEventListener("submit", searchSiniestro);
+document.getElementById("axaSiniestrosForm")?.addEventListener("submit", searchAxaSiniestro);
+document.getElementById("axaSiniestrosModalClose")?.addEventListener("click", closeAxaSiniestrosResult);
+document.getElementById("axaSiniestrosModal")?.addEventListener("click", (event) => {
+  if (event.target?.id === "axaSiniestrosModal") closeAxaSiniestrosResult();
+});
+document.getElementById("sinExcelInput").addEventListener("change", importSiniestrosExcel);
+document.getElementById("axaSinExcelInput")?.addEventListener("change", importAxaSiniestrosExcel);
 document.getElementById("operatorModeBtn").addEventListener("click", () => setUiMode("operator"));
 document.getElementById("tvModeBtn").addEventListener("click", () => setUiMode("tv"));
-document.getElementById("monitorViewBtn").addEventListener("click", () => setMainView("monitor"));
+document.getElementById("gnpCarrierBtn").addEventListener("click", () => setCarrier("gnp"));
+document.getElementById("axaCarrierBtn").addEventListener("click", () => setCarrier("axa"));
+document.getElementById("monitorViewBtn").addEventListener("click", () => setMainView(carrierView("monitor")));
 document.getElementById("bitacoraViewBtn").addEventListener("click", () => setMainView("bitacora"));
+document.getElementById("siniestrosViewBtn").addEventListener("click", () => setMainView(carrierView("siniestros")));
+document.getElementById("adminViewBtn").addEventListener("click", () => setMainView("admin"));
+document.getElementById("axaRunBtn")?.addEventListener("click", runAxaNow);
+document.getElementById("axaSearchInput")?.addEventListener("input", applyAxaFilters);
+document.getElementById("axaStatusFilter")?.addEventListener("change", applyAxaFilters);
+document.querySelectorAll(".axa-filter-tab").forEach((button) => {
+  button.addEventListener("click", () => {
+    axaQuickFilter = button.dataset.axaFilter || "all";
+    document.querySelectorAll(".axa-filter-tab").forEach((item) => {
+      item.classList.toggle("active", item.dataset.axaFilter === axaQuickFilter);
+    });
+    applyAxaFilters();
+  });
+});
+document.getElementById("loginForm").addEventListener("submit", submitLogin);
+document.getElementById("logoutBtn").addEventListener("click", logout);
+document.getElementById("adminUserForm").addEventListener("submit", createAdminUser);
+document.getElementById("adminCancelUserEditBtn").addEventListener("click", resetAdminUserForm);
+document.querySelectorAll("[data-admin-tab]").forEach((button) => {
+  button.addEventListener("click", () => setAdminTab(button.dataset.adminTab));
+});
+["adminMetricUser", "adminMetricStatus", "adminMetricRisk", "adminMetricDateField", "adminMetricFrom", "adminMetricTo"].forEach((id) => {
+  document.getElementById(id)?.addEventListener("change", () => {
+    selectedAdminUserId = document.getElementById("adminMetricUser")?.value || "";
+    void refreshAdminMetrics();
+  });
+});
+document.getElementById("adminClearFiltersBtn").addEventListener("click", clearAdminFilters);
+document.getElementById("adminExportBtn").addEventListener("click", exportAdminMetricsCsv);
 document.querySelectorAll(".quick-filter").forEach((button) => {
   button.addEventListener("click", () => setQuickFilter(button.dataset.filter));
 });
@@ -2455,5 +3688,9 @@ setQuickFilter(quickFilter);
 updateClock();
 setInterval(updateClock, 1000);
 startCarousel();
-fetchStatus();
-startStatusPolling();
+checkAuth().then((authenticated) => {
+  if (authenticated) {
+    fetchStatus();
+    startStatusPolling();
+  }
+});

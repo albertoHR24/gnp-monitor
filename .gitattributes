@@ -1,0 +1,18 @@
+* text=auto
+
+# Explicitly normalize to LF
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.ps1 text eol=lf
+*.cmd text eol=lf
+*.env text eol=lf
+
+# Binary files
+*.pdf binary
+*.png binary
+*.jpg binary
+*.zip binary
+*.exe binary

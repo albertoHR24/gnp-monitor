@@ -1,8 +1,10 @@
 ﻿require("dotenv").config();
 
 const express = require("express");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("child_process");
 const Database = require("better-sqlite3");
 const XLSX = require("xlsx");
 const { chromium } = require("playwright");
@@ -51,6 +53,9 @@ const CONFIG = {
   port: Number(process.env.PORT || 3000),
   host: process.env.HOST || "127.0.0.1",
   monitorToken: process.env.MONITOR_TOKEN || "",
+  adminUsername: process.env.ADMIN_USERNAME || "admin",
+  adminPassword: process.env.ADMIN_PASSWORD || process.env.MONITOR_TOKEN || "admin",
+  sessionDays: Math.max(Number(process.env.SESSION_DAYS || 7), 1),
   allowedIps: parseListEnv(process.env.ALLOWED_IPS),
   trustProxy: parseBooleanEnv(process.env.TRUST_PROXY, false),
   loginUrl: process.env.LOGIN_URL || "https://portalintermediarios.gnp.com.mx/sesion",
@@ -61,6 +66,12 @@ const CONFIG = {
   consultaUrl:
     process.env.CONSULTA_URL ||
     "https://portalintermediarios.gnp.com.mx/home/pagina-iframe?tipo=aplicacion&menu=Todos%20los%20ramos%20Consulta",
+  siniestrosUrl:
+    process.env.SINIESTROS_URL ||
+    "https://portalintermediarios.gnp.com.mx/home/pagina-iframe?tipo=aplicacion&menu=Siniestros%20ED%20CP%20GN",
+  axaSiniestrosUrl:
+    process.env.AXA_SINIESTROS_URL ||
+    "https://axa.mx/web/my-axa/consulta-express",
   browserChannel: getBrowserChannel(),
   profileDir: getProfileDir(),
   email: process.env.GNP_EMAIL || "",
@@ -88,13 +99,32 @@ const CONFIG = {
   tvScrollIntervalMs: Math.max(Number(process.env.TV_SCROLL_INTERVAL_MS || 90), 20),
   queryDateFrom: process.env.QUERY_DATE_FROM || "",
   queryDateTo: process.env.QUERY_DATE_TO || "today",
+  openWaEnabled: parseBooleanEnv(process.env.OPENWA_ENABLED, false),
+  openWaBaseUrl: (process.env.OPENWA_BASE_URL || "http://localhost:2785/api").replace(/\/+$/, ""),
+  openWaApiKey: process.env.OPENWA_API_KEY || "",
+  openWaSessionId: process.env.OPENWA_SESSION_ID || "",
+  openWaChatIds: parseListEnv(process.env.OPENWA_CHAT_IDS),
+  openWaMaxChanges: Math.max(Number(process.env.OPENWA_MAX_CHANGES || 10), 1),
   dataDir: DATA_DIR,
   logsDir: path.join(DATA_DIR, "logs"),
   screenshotsDir: path.join(DATA_DIR, "screenshots"),
+  backupDir: path.join(DATA_DIR, "backups"),
+  siniestrosPdfDir: path.join(DATA_DIR, "siniestros-pdf"),
+  siniestrosProfileDir:
+    process.env.SINIESTROS_PROFILE_DIR ||
+    path.join(path.dirname(getProfileDir()), `${path.basename(getProfileDir())}-siniestros`),
+  axaSiniestrosProfileDir:
+    process.env.AXA_SINIESTROS_PROFILE_DIR ||
+    path.join(path.dirname(getProfileDir()), `${path.basename(getProfileDir())}-axa-siniestros`),
   sessionInfoFile: path.join(DATA_DIR, "session.json"),
   previousFile: path.join(DATA_DIR, "estado-anterior.json"),
   currentFile: path.join(DATA_DIR, "estado-actual.json"),
   diffFile: path.join(DATA_DIR, "cambios.json"),
+  axaPreviousFile: path.join(DATA_DIR, "axa-estado-anterior.json"),
+  axaCurrentFile: path.join(DATA_DIR, "axa-estado-actual.json"),
+  axaDiffFile: path.join(DATA_DIR, "axa-cambios.json"),
+  axaRawFile: path.join(DATA_DIR, "axa-raw-response.json"),
+  axaDebugFile: path.join(DATA_DIR, "axa-debug.json"),
   rawFile: path.join(DATA_DIR, "raw-response.json"),
   extractedFile: path.join(DATA_DIR, "items-extraidos.json"),
   debugCapturedFile: path.join(DATA_DIR, "debug-captured.json"),
@@ -109,10 +139,31 @@ if (CONFIG.trustProxy) {
   app.set("trust proxy", true);
 }
 
-for (const dir of [CONFIG.dataDir, CONFIG.logsDir, CONFIG.screenshotsDir, CONFIG.profileDir]) {
+for (const dir of [
+  CONFIG.dataDir,
+  CONFIG.logsDir,
+  CONFIG.screenshotsDir,
+  CONFIG.backupDir,
+  CONFIG.siniestrosPdfDir,
+  CONFIG.profileDir,
+  CONFIG.siniestrosProfileDir,
+  CONFIG.axaSiniestrosProfileDir,
+]) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
+}
+
+const ACTIVE_USER_ROLES = new Set(["admin", "executive"]);
+
+// Caches para optimizar rendimiento
+const DATE_SORT_CACHE = new Map();
+const NORMALIZE_TEXT_CACHE = new Map();
+const NORMALIZE_LOOSE_CACHE = new Map();
+const COLLATOR = new Intl.Collator("es", { numeric: true });
+
+function isAllowedUserRole(role) {
+  return ACTIVE_USER_ROLES.has(String(role || ""));
 }
 
 const LOGIN_SELECTORS = {
@@ -209,6 +260,54 @@ const CONSULTA_SELECTORS = {
   ],
 };
 
+const SINIESTROS_SELECTORS = {
+  ramo: 'input[name="esRamo_complete"]',
+  criterio: 'input[name="esCriterioBusqueda_complete"]',
+  numeroTransaccion: 'input[name="esNumeroTransaccion_txt"], #esNumeroTransaccion_txtesNumeroTransaccion_txt',
+  buscar: [
+    '#esBuscar_btnesBuscar_btn',
+    'input.esBuscar_btn[name="esBuscar_btn"][value="Buscar"]',
+    'button:has-text("Buscar")',
+    'a:has-text("Buscar")',
+    'input[type="button"][value*="Buscar" i]',
+    'input[type="submit"][value*="Buscar" i]',
+    'label:has(input.esBuscar_btn) .hoverBtn',
+  ],
+  aceptarError: [
+    'button:has-text("Aceptar")',
+    'input[type="button"][value*="Aceptar" i]',
+    'a:has-text("Aceptar")',
+  ],
+  tablaResultados: '#tbl_busqueda',
+  verDocumentos: [
+    '#esVerDocumentos_btnesVerDocumentos_btn',
+    'input.esVerDocumentos_btn[name="esVerDocumentos_btn"][value="Ver documentos"]',
+  ],
+};
+
+const AXA_SINIESTROS_SELECTORS = {
+  folio: [
+    'input[id$=":datosSiniestroForm:reclamacion"]',
+    'input[name$=":datosSiniestroForm:reclamacion"]',
+    'input.input-siniestros[placeholder*="reclamaci"]',
+    'input[placeholder*="reclamaci"]',
+  ],
+  consultar: [
+    'a[id$=":datosSiniestroForm:consult-btn"]:visible',
+    'a.btn-siniestros-gmm:has-text("Consultar")',
+    'a:has-text("Consultar")',
+    'button:has-text("Consultar")',
+  ],
+  consultarBloqueado: [
+    'span[id$=":datosSiniestroForm:consult-btn-block"]',
+    '.btn-siniestros-gmm-block',
+  ],
+  mensajeReclamacion: [
+    'span[id$=":datosSiniestroForm:messageReclamacion"]',
+    '.wc-error-message-min span',
+  ],
+};
+
 const WORKFLOW_LABELS = [
   "Gastos Medicos Mayores",
   "Gastos MÃ©dicos Mayores",
@@ -286,6 +385,9 @@ function parseConfiguredDate(value, fallbackDate) {
   if (text === "today" || text === "hoy") {
     return new Date();
   }
+  if (text === "month_end" || text === "fin_mes" || text === "fin-de-mes") {
+    return new Date(fallbackDate.getFullYear(), fallbackDate.getMonth() + 1, 0);
+  }
 
   const ymdDashed = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (ymdDashed) {
@@ -330,8 +432,9 @@ function getDefaultDateRange() {
 }
 
 function getCurrentMonthDateRange() {
-  const end = new Date();
-  const start = new Date(end.getFullYear(), end.getMonth(), 1);
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), 1);
+  const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
 
   return {
     start: formatCompactDate(start),
@@ -356,14 +459,36 @@ function tryParseJsonArray(rawValue) {
 }
 
 function normalizeText(value) {
-  return String(value ?? "").replace(/\s+/g, " ").trim();
+  // Usar caché para textos normalizados
+  if (NORMALIZE_TEXT_CACHE.has(value)) {
+    return NORMALIZE_TEXT_CACHE.get(value);
+  }
+  const result = String(value ?? "").replace(/\s+/g, " ").trim();
+  NORMALIZE_TEXT_CACHE.set(value, result);
+  return result;
 }
 
 function normalizeLoose(value) {
-  return normalizeText(value)
+  // Usar caché para búsquedas normalizadas
+  if (NORMALIZE_LOOSE_CACHE.has(value)) {
+    return NORMALIZE_LOOSE_CACHE.get(value);
+  }
+  const result = fixMojibakeText(normalizeText(value))
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
+  NORMALIZE_LOOSE_CACHE.set(value, result);
+  return result;
+}
+
+function fixMojibakeText(value) {
+  return String(value ?? "")
+    .replace(/ÃƒÂ±|Ã±/g, "ñ")
+    .replace(/ÃƒÂ©|Ã©/g, "é")
+    .replace(/ÃƒÂ¡|Ã¡/g, "á")
+    .replace(/ÃƒÂ­|Ã­/g, "í")
+    .replace(/ÃƒÂ³|Ã³/g, "ó")
+    .replace(/ÃƒÂº|Ãº/g, "ú");
 }
 
 function makeKey(row) {
@@ -371,25 +496,33 @@ function makeKey(row) {
 }
 
 function parseDateForSort(value) {
+  // Usar caché para evitar reprocesar fechas iguales
+  if (DATE_SORT_CACHE.has(value)) {
+    return DATE_SORT_CACHE.get(value);
+  }
+
   const text = normalizeText(value);
-  if (!text) {
-    return Number.POSITIVE_INFINITY;
+  let result = Number.POSITIVE_INFINITY;
+
+  if (text) {
+    const ddmmyyyy = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+.*)?$/);
+    if (ddmmyyyy) {
+      const [, day, month, year] = ddmmyyyy;
+      result = new Date(Number(year), Number(month) - 1, Number(day)).getTime();
+    } else {
+      const yyyymmdd = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T].*)?$/);
+      if (yyyymmdd) {
+        const [, year, month, day] = yyyymmdd;
+        result = new Date(Number(year), Number(month) - 1, Number(day)).getTime();
+      } else {
+        const parsed = new Date(text).getTime();
+        result = Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
+      }
+    }
   }
 
-  const ddmmyyyy = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+.*)?$/);
-  if (ddmmyyyy) {
-    const [, day, month, year] = ddmmyyyy;
-    return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
-  }
-
-  const yyyymmdd = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T].*)?$/);
-  if (yyyymmdd) {
-    const [, year, month, day] = yyyymmdd;
-    return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
-  }
-
-  const parsed = new Date(text).getTime();
-  return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
+  DATE_SORT_CACHE.set(value, result);
+  return result;
 }
 
 function parseGnpDate(value) {
@@ -427,6 +560,215 @@ function makeBitacoraId() {
   return `bit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function makeUserId() {
+  return `usr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
+  const hash = crypto.pbkdf2Sync(String(password || ""), salt, 120000, 32, "sha256").toString("hex");
+  return `pbkdf2_sha256$120000$${salt}$${hash}`;
+}
+
+function verifyPassword(password, storedHash) {
+  const parts = String(storedHash || "").split("$");
+  if (parts.length !== 4 || parts[0] !== "pbkdf2_sha256") {
+    return false;
+  }
+  const [, iterationsText, salt, expected] = parts;
+  const actual = crypto.pbkdf2Sync(String(password || ""), salt, Number(iterationsText), 32, "sha256").toString("hex");
+  if (actual.length !== expected.length) {
+    return false;
+  }
+  return crypto.timingSafeEqual(Buffer.from(actual, "hex"), Buffer.from(expected, "hex"));
+}
+
+function sessionCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: parseBooleanEnv(process.env.SESSION_COOKIE_SECURE, false),
+    maxAge: CONFIG.sessionDays * 24 * 60 * 60 * 1000,
+  };
+}
+
+function parseCookies(header = "") {
+  return String(header || "")
+    .split(";")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .reduce((cookies, item) => {
+      const index = item.indexOf("=");
+      if (index > -1) {
+        cookies[decodeURIComponent(item.slice(0, index))] = decodeURIComponent(item.slice(index + 1));
+      }
+      return cookies;
+    }, {});
+}
+
+function hashSessionToken(token) {
+  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+}
+
+function publicUser(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.display_name || user.displayName || user.username,
+    role: user.role,
+    active: user.active !== undefined ? Boolean(user.active) : true,
+    createdAt: user.created_at || user.createdAt || "",
+    updatedAt: user.updated_at || user.updatedAt || "",
+  };
+}
+
+function seedAdminUser(database) {
+  const total = database
+    .prepare("SELECT COUNT(*) AS total FROM users WHERE role = 'admin' AND active = 1")
+    .get().total;
+  if (total > 0) {
+    return;
+  }
+  const now = nowIso();
+  const username = normalizeText(CONFIG.adminUsername);
+  const existing = database.prepare("SELECT id FROM users WHERE lower(username) = lower(?)").get(username);
+  if (existing) {
+    database
+      .prepare(`
+        UPDATE users
+        SET role = 'admin',
+            active = 1,
+            password_hash = ?,
+            display_name = ?,
+            updated_at = ?
+        WHERE id = ?
+      `)
+      .run(hashPassword(CONFIG.adminPassword), "Administrador", now, existing.id);
+    return;
+  }
+  database
+    .prepare(`
+      INSERT INTO users (id, username, display_name, password_hash, role, active, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'admin', 1, ?, ?)
+    `)
+    .run(makeUserId(), username, "Administrador", hashPassword(CONFIG.adminPassword), now, now);
+}
+
+function readUserByUsername(username) {
+  return initDatabase()
+    .prepare(`
+      SELECT *
+      FROM users
+      WHERE lower(username) = lower(?)
+        AND active = 1
+        AND role IN ('admin', 'executive')
+    `)
+    .get(normalizeText(username));
+}
+
+function readUserById(id) {
+  return initDatabase()
+    .prepare(`
+      SELECT *
+      FROM users
+      WHERE id = ?
+        AND active = 1
+        AND role IN ('admin', 'executive')
+    `)
+    .get(normalizeText(id));
+}
+
+function readAnyUserById(id) {
+  return initDatabase()
+    .prepare("SELECT * FROM users WHERE id = ? AND role IN ('admin', 'executive')")
+    .get(normalizeText(id));
+}
+
+function readAdminUsers() {
+  return initDatabase()
+    .prepare(`
+      SELECT id, username, display_name, role, active, created_at, updated_at
+      FROM users
+      WHERE role IN ('admin', 'executive')
+      ORDER BY active DESC, role, display_name
+    `)
+    .all();
+}
+
+function countActiveAdmins(exceptUserId = "") {
+  return initDatabase()
+    .prepare("SELECT COUNT(*) AS total FROM users WHERE role = 'admin' AND active = 1 AND id <> ?")
+    .get(normalizeText(exceptUserId)).total;
+}
+
+function clearUserSessions(userId) {
+  initDatabase().prepare("DELETE FROM auth_sessions WHERE user_id = ?").run(normalizeText(userId));
+}
+
+function createAuthSession(user) {
+  if (!isAllowedUserRole(user?.role)) {
+    throw new Error("Rol de usuario no permitido.");
+  }
+  const database = initDatabase();
+  const token = crypto.randomBytes(32).toString("base64url");
+  const now = nowIso();
+  const expiresAt = new Date(Date.now() + CONFIG.sessionDays * 24 * 60 * 60 * 1000).toISOString();
+  database
+    .prepare("INSERT INTO auth_sessions (token_hash, user_id, expires_at, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)")
+    .run(hashSessionToken(token), user.id, expiresAt, now, now);
+  return token;
+}
+
+function getRequestUser(req) {
+  if (req.user) {
+    return req.user;
+  }
+  const cookies = parseCookies(req.get("cookie"));
+  const token = cookies.gnp_session || "";
+  if (!token) {
+    return null;
+  }
+  const database = initDatabase();
+  const row = database
+    .prepare(`
+      SELECT u.*
+      FROM auth_sessions s
+      JOIN users u ON u.id = s.user_id
+      WHERE s.token_hash = ?
+        AND s.expires_at > ?
+        AND u.active = 1
+        AND u.role IN ('admin', 'executive')
+    `)
+    .get(hashSessionToken(token), nowIso());
+  if (row) {
+    database.prepare("UPDATE auth_sessions SET last_seen_at = ? WHERE token_hash = ?").run(nowIso(), hashSessionToken(token));
+    req.user = row;
+  }
+  return row || null;
+}
+
+function writeAuditLog(req, action, resource, resourceId = "", detail = {}) {
+  try {
+    const user = getRequestUser(req);
+    initDatabase()
+      .prepare(`
+        INSERT INTO audit_log (user_id, action, resource, resource_id, created_at, ip, detail_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        user?.id || null,
+        action,
+        resource,
+        normalizeText(resourceId),
+        nowIso(),
+        getClientIp(req),
+        JSON.stringify(detail || {})
+      );
+  } catch (error) {
+    pushLog("audit", `No pude registrar auditoria: ${error.message}`, { error: true });
+  }
+}
+
 function initDatabase() {
   if (db) {
     return db;
@@ -438,6 +780,9 @@ function initDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS bitacora (
       id TEXT PRIMARY KEY,
+      assigned_user_id TEXT,
+      created_by_user_id TEXT,
+      created_by_name TEXT,
       dias_atraso TEXT,
       fecha_entrada_correo TEXT,
       fecha_entrega TEXT,
@@ -455,12 +800,46 @@ function initDatabase() {
       archived_at TEXT,
       archived_reason TEXT,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (assigned_user_id) REFERENCES users(id) ON DELETE SET NULL,
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
     );
 
     CREATE INDEX IF NOT EXISTS idx_bitacora_folio ON bitacora(folio);
     CREATE INDEX IF NOT EXISTS idx_bitacora_poliza ON bitacora(poliza);
     CREATE INDEX IF NOT EXISTS idx_bitacora_responsable ON bitacora(responsable);
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      display_name TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('admin', 'executive')),
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      last_seen_at TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT,
+      action TEXT NOT NULL,
+      resource TEXT,
+      resource_id TEXT,
+      created_at TEXT NOT NULL,
+      ip TEXT,
+      detail_json TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
 
     CREATE TABLE IF NOT EXISTS bitacora_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -536,8 +915,39 @@ function initDatabase() {
   `);
 
   ensureBitacoraAuditSchema(db);
+  migrateDisallowedUserRoles(db);
+  seedAdminUser(db);
   migrateBitacoraJsonToDb();
   return db;
+}
+
+function migrateDisallowedUserRoles(database) {
+  const now = nowIso();
+  const result = database
+    .prepare(`
+      UPDATE users
+      SET active = 0,
+          updated_at = ?
+      WHERE role NOT IN ('admin', 'executive')
+        AND active = 1
+    `)
+    .run(now);
+  database
+    .prepare(`
+      DELETE FROM auth_sessions
+      WHERE user_id IN (
+        SELECT id
+        FROM users
+        WHERE active = 0
+           OR role NOT IN ('admin', 'executive')
+      )
+    `)
+    .run();
+  if (result.changes) {
+    pushLog("security", "Usuarios con rol no permitido fueron desactivados.", {
+      count: result.changes,
+    });
+  }
 }
 
 function ensureBitacoraAuditSchema(database) {
@@ -550,10 +960,19 @@ function ensureBitacoraAuditSchema(database) {
   };
 
   addColumn("version", "version INTEGER NOT NULL DEFAULT 1");
+  addColumn("assigned_user_id", "assigned_user_id TEXT");
+  addColumn("created_by_user_id", "created_by_user_id TEXT");
+  addColumn("created_by_name", "created_by_name TEXT");
   addColumn("archived_at", "archived_at TEXT");
   addColumn("archived_reason", "archived_reason TEXT");
+  addColumn("ot_interna", "ot_interna TEXT");
+  addColumn("ramo", "ramo TEXT");
   database.exec("UPDATE bitacora SET archived_at = NULL WHERE archived_at = ''");
   database.exec("CREATE INDEX IF NOT EXISTS idx_bitacora_archived_at ON bitacora(archived_at)");
+  database.exec("CREATE INDEX IF NOT EXISTS idx_bitacora_assigned_user ON bitacora(assigned_user_id)");
+  database.exec("CREATE INDEX IF NOT EXISTS idx_bitacora_created_by_user ON bitacora(created_by_user_id)");
+  database.exec("CREATE INDEX IF NOT EXISTS idx_bitacora_ot_interna ON bitacora(ot_interna)");
+  database.exec("CREATE INDEX IF NOT EXISTS idx_bitacora_ramo ON bitacora(ramo)");
 
   const historyColumns = new Set(database.prepare("PRAGMA table_info(bitacora_history)").all().map((column) => column.name));
   const addHistoryColumn = (name, sql) => {
@@ -565,6 +984,8 @@ function ensureBitacoraAuditSchema(database) {
 
   addHistoryColumn("changed_by", "changed_by TEXT");
   addHistoryColumn("reason", "reason TEXT");
+  addHistoryColumn("ot_interna", "ot_interna TEXT");
+  addHistoryColumn("ramo", "ramo TEXT");
 }
 
 function migrateBitacoraJsonToDb() {
@@ -581,13 +1002,13 @@ function migrateBitacoraJsonToDb() {
 
   const insert = database.prepare(`
     INSERT OR IGNORE INTO bitacora (
-      id, dias_atraso, fecha_entrada_correo, fecha_entrega, tramite, estado, cliente,
+      id, assigned_user_id, created_by_user_id, created_by_name, dias_atraso, fecha_entrada_correo, fecha_entrega, tramite, estado, cliente,
       poliza, aseguradora, descripcion, folio, comentarios, fecha_salida, responsable,
-      version, archived_at, archived_reason, created_at, updated_at
+      ot_interna, ramo, version, archived_at, archived_reason, created_at, updated_at
     ) VALUES (
-      @id, @diasAtraso, @fechaEntradaCorreo, @fechaEntrega, @tramite, @estado, @cliente,
+      @id, @assignedUserId, @createdByUserId, @createdByName, @diasAtraso, @fechaEntradaCorreo, @fechaEntrega, @tramite, @estado, @cliente,
       @poliza, @aseguradora, @descripcion, @folio, @comentarios, @fechaSalida, @responsable,
-      @version, @archivedAt, @archivedReason, @createdAt, @updatedAt
+      @otInterna, @ramo, @version, @archivedAt, @archivedReason, @createdAt, @updatedAt
     )
   `);
 
@@ -607,6 +1028,9 @@ function migrateBitacoraJsonToDb() {
 function dbRowToBitacora(row) {
   return {
     id: row.id,
+    assignedUserId: row.assigned_user_id || "",
+    createdByUserId: row.created_by_user_id || "",
+    createdByName: row.created_by_name || "",
     diasAtraso: row.dias_atraso || "",
     fechaEntradaCorreo: row.fecha_entrada_correo || "",
     fechaEntrega: row.fecha_entrega || "",
@@ -620,6 +1044,8 @@ function dbRowToBitacora(row) {
     comentarios: row.comentarios || "",
     fechaSalida: row.fecha_salida || "",
     responsable: row.responsable || "",
+    otInterna: row.ot_interna || "",
+    ramo: row.ramo || "",
     version: Number(row.version || 1),
     archivedAt: row.archived_at || "",
     archivedReason: row.archived_reason || "",
@@ -632,14 +1058,30 @@ function readBitacora(options = {}) {
   const includeArchived = Boolean(options.includeArchived);
   const onlyArchived = Boolean(options.onlyArchived);
   if (db) {
-    const where = onlyArchived
-      ? "WHERE archived_at IS NOT NULL AND archived_at <> ''"
-      : includeArchived
-        ? ""
-        : "WHERE archived_at IS NULL OR archived_at = ''";
+    const clauses = [];
+    if (onlyArchived) {
+      clauses.push("archived_at IS NOT NULL AND archived_at <> ''");
+    } else if (!includeArchived) {
+      clauses.push("(archived_at IS NULL OR archived_at = '')");
+    }
+    if (options.user && options.user.role !== "admin") {
+      clauses.push(`(
+        assigned_user_id = @userId
+        OR lower(responsable) = lower(@displayName)
+        OR lower(responsable) = lower(@username)
+      )`);
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    const params = options.user
+      ? {
+          userId: options.user.id,
+          displayName: options.user.display_name || options.user.username,
+          username: options.user.username,
+        }
+      : {};
     return db
       .prepare(`SELECT * FROM bitacora ${where} ORDER BY updated_at DESC, created_at DESC`)
-      .all()
+      .all(params)
       .map(dbRowToBitacora);
   }
 
@@ -647,7 +1089,51 @@ function readBitacora(options = {}) {
   if (!Array.isArray(items)) {
     return [];
   }
-  return includeArchived ? items : items.filter((item) => !item.archivedAt);
+  const visibleItems = includeArchived ? items : items.filter((item) => !item.archivedAt);
+  if (options.user && options.user.role !== "admin") {
+    const names = new Set([
+      normalizeLoose(options.user.id),
+      normalizeLoose(options.user.username),
+      normalizeLoose(options.user.display_name || options.user.displayName),
+    ].filter(Boolean));
+    return visibleItems.filter((item) =>
+      names.has(normalizeLoose(item.assignedUserId)) || names.has(normalizeLoose(item.responsable))
+    );
+  }
+  return visibleItems;
+}
+
+function readBitacoraForRequest(req, options = {}) {
+  return readBitacora({
+    ...options,
+    user: getRequestUser(req),
+  });
+}
+
+function countBitacoraRecordsForUser(user = null) {
+  if (!user || user.role === "admin") {
+    return countBitacoraRecords();
+  }
+  const database = initDatabase();
+  const params = {
+    userId: user.id,
+    displayName: user.display_name || user.username,
+    username: user.username,
+  };
+  const ownerWhere = `(
+    assigned_user_id = @userId
+    OR lower(responsable) = lower(@displayName)
+    OR lower(responsable) = lower(@username)
+  )`;
+  return {
+    total: database.prepare(`SELECT COUNT(*) AS total FROM bitacora WHERE ${ownerWhere}`).get(params).total,
+    active: database
+      .prepare(`SELECT COUNT(*) AS total FROM bitacora WHERE ${ownerWhere} AND (archived_at IS NULL OR archived_at = '')`)
+      .get(params).total,
+    archived: database
+      .prepare(`SELECT COUNT(*) AS total FROM bitacora WHERE ${ownerWhere} AND archived_at IS NOT NULL AND archived_at <> ''`)
+      .get(params).total,
+  };
 }
 
 function countBitacoraRecords() {
@@ -664,8 +1150,11 @@ function sanitizeBitacoraEntry(input = {}, previous = {}) {
   const clean = {
     ...previous,
     id: normalizeText(previous.id || input.id) || makeBitacoraId(),
+    assignedUserId: normalizeText(input.assignedUserId || input.assigned_user_id || previous.assignedUserId),
+    createdByUserId: normalizeText(previous.createdByUserId || previous.created_by_user_id || input.createdByUserId || input.created_by_user_id),
+    createdByName: normalizeText(previous.createdByName || previous.created_by_name || input.createdByName || input.created_by_name),
     diasAtraso: normalizeText(input.diasAtraso),
-    fechaEntradaCorreo: normalizeText(input.fechaEntradaCorreo),
+    fechaEntradaCorreo: normalizeText(input.fechaEntradaCorreo || input.fecha_entrada_correo || previous.fechaEntradaCorreo),
     fechaEntrega: normalizeText(input.fechaEntrega),
     tramite: normalizeText(input.tramite),
     estado: normalizeText(input.estado),
@@ -675,8 +1164,10 @@ function sanitizeBitacoraEntry(input = {}, previous = {}) {
     descripcion: normalizeText(input.descripcion),
     folio: normalizeText(input.folio),
     comentarios: normalizeText(input.comentarios),
-    fechaSalida: normalizeText(input.fechaSalida),
+    fechaSalida: normalizeText(input.fechaSalida || input.fecha_salida || previous.fechaSalida),
     responsable: normalizeText(input.responsable),
+    otInterna: normalizeText(input.otInterna || input.ot_interna || previous.otInterna || previous.ot_interna),
+    ramo: normalizeRamo(input.ramo || input.RAMO || previous.ramo),
     version: Number(previous.version || input.version || 1),
     archivedAt: normalizeText(previous.archivedAt || input.archivedAt) || null,
     archivedReason: normalizeText(previous.archivedReason || input.archivedReason),
@@ -687,7 +1178,57 @@ function sanitizeBitacoraEntry(input = {}, previous = {}) {
     clean.createdAt = now;
   }
 
+  if (!clean.otInterna) {
+    clean.otInterna = makeGeneratedOtInterna(clean);
+  }
   return clean;
+}
+
+function makeGeneratedOtInterna(entry = {}) {
+  const sourceDate = parseGnpDate(entry.createdAt || entry.fechaEntradaCorreo || entry.updatedAt) || new Date();
+  const year = String(sourceDate.getFullYear()).slice(-2);
+  const month = String(sourceDate.getMonth() + 1).padStart(2, "0");
+  const day = String(sourceDate.getDate()).padStart(2, "0");
+  const sourceKey = [entry.id, entry.folio, entry.poliza, entry.createdAt].filter(Boolean).join("|") || String(Date.now());
+  const suffix = crypto.createHash("sha1").update(sourceKey).digest("hex").slice(0, 5).toUpperCase();
+  return `OT-${year}${month}${day}-${suffix}`;
+}
+
+function inferBitacoraRamo(entry = {}, monitorRow = null) {
+  const source = normalizeLoose([
+    entry.ramo,
+    monitorRow?.ramo,
+    monitorRow?.rol,
+    monitorRow?.producto,
+    monitorRow?.tipoSolicitud,
+    entry.tramite,
+    entry.descripcion,
+    entry.comentarios,
+  ].filter(Boolean).join(" "));
+  if (source.includes("gmm") || source.includes("gastos medicos")) return "GMM";
+  if (source.includes("vida")) return "Vida";
+  if (source.includes("auto")) return "Autos";
+  if (source.includes("dano") || source.includes("danos") || source.includes("da?o")) return "Daño";
+  return "";
+}
+
+function normalizeRamo(value) {
+  const text = normalizeLoose(value);
+  if (!text) return "";
+  if (text.includes("gmm") || text.includes("gastos medicos")) return "GMM";
+  if (text.includes("vida")) return "Vida";
+  if (text.includes("auto")) return "Autos";
+  if (text.includes("dano") || text.includes("danos") || text.includes("da?o")) return "Daño";
+  return "";
+}
+
+function completeBitacoraTrackingFields(entry = {}, fallback = {}) {
+  if (!entry) return entry;
+  return {
+    ...entry,
+    otInterna: entry.otInterna || entry.ot_interna || fallback.otInterna || fallback.ot_interna || "",
+    ramo: normalizeRamo(entry.ramo || fallback.ramo || ""),
+  };
 }
 
 function normalizeHeader(value) {
@@ -723,6 +1264,16 @@ function pickExcelValue(row, headerMap, names) {
   return "";
 }
 
+function excelFolioValueToText(value) {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? String(value) : String(value).replace(/\.0+$/, "");
+  }
+  return normalizeText(value);
+}
+
 function findExcelHeaderRow(rows) {
   let best = { index: -1, score: 0 };
   rows.forEach((row, index) => {
@@ -736,6 +1287,8 @@ function findExcelHeaderRow(rows) {
       "comentarios",
       "fechadeentrega",
       "fechadeentradacorreo",
+      "ramo",
+      "otinterna",
     ].filter((header) => headers.has(header)).length;
     if (score > best.score) {
       best = { index, score };
@@ -744,8 +1297,56 @@ function findExcelHeaderRow(rows) {
   return best.score >= 2 ? best.index : -1;
 }
 
+function validateExcelBuffer(buffer, maxSizeMB = 10) {
+  if (!Buffer.isBuffer(buffer)) {
+    throw new Error("Excel: se esperaba un archivo binario");
+  }
+  const maxBytes = maxSizeMB * 1024 * 1024;
+  if (buffer.length === 0 || buffer.length > maxBytes) {
+    throw new Error(`Excel: archivo vacío o demasiado grande (máx ${maxSizeMB}MB)`);
+  }
+}
+
+function createDatabaseBackup() {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").split("T")[0];
+    const backupFile = path.join(CONFIG.backupDir, `gnp-monitor-${timestamp}.db`);
+    if (fs.existsSync(CONFIG.databaseFile)) {
+      fs.copyFileSync(CONFIG.databaseFile, backupFile);
+      pushLog("backup", `Backup creado: ${path.basename(backupFile)}`, { size: fs.statSync(backupFile).size });
+    }
+    cleanOldBackups();
+    return backupFile;
+  } catch (err) {
+    pushLog("backup", `Error al crear backup: ${err.message}`, { error: true });
+    return null;
+  }
+}
+
+function cleanOldBackups(keepDays = 30) {
+  try {
+    const backupDir = CONFIG.backupDir;
+    if (!fs.existsSync(backupDir)) return;
+    const now = Date.now();
+    const maxAge = keepDays * 24 * 60 * 60 * 1000;
+    fs.readdirSync(backupDir)
+      .filter((file) => file.startsWith("gnp-monitor-") && file.endsWith(".db"))
+      .forEach((file) => {
+        const fullPath = path.join(backupDir, file);
+        const age = now - fs.statSync(fullPath).mtime.getTime();
+        if (age > maxAge) {
+          fs.unlinkSync(fullPath);
+          pushLog("backup", `Backup antiguo eliminado: ${file}`, { daysOld: Math.floor(age / (24 * 60 * 60 * 1000)) });
+        }
+      });
+  } catch (err) {
+    pushLog("backup", `Error al limpiar backups: ${err.message}`, { error: true });
+  }
+}
+
 function parseBitacoraExcel(buffer) {
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  validateExcelBuffer(buffer);
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true, defval: "" });
   const sheetName =
     workbook.SheetNames.find((name) => normalizeLoose(name).includes("pendientes")) ||
     workbook.SheetNames[0];
@@ -788,8 +1389,70 @@ function parseBitacoraExcel(buffer) {
       comentarios: pickExcelValue(row, headerMap, ["COMENTARIOS"]),
       fechaSalida: pickExcelValue(row, headerMap, ["FECHA DE SALIDA"]),
       responsable: pickExcelValue(row, headerMap, ["RESPONSABLE", "ASESOR", "AGENTE SEGUIMIENTO"]),
+      otInterna: pickExcelValue(row, headerMap, ["OT INTERNA", "OT INTERNA / TAREA", "TAREA", "FOLIO INTERNO"]),
+      ramo: pickExcelValue(row, headerMap, ["RAMO"]),
     }))
     .filter((entry) => entry.folio || entry.poliza || entry.cliente);
+}
+
+function parseSiniestrosExcel(buffer) {
+  validateExcelBuffer(buffer);
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true, defval: "" });
+  if (!workbook.SheetNames.length) {
+    return [];
+  }
+
+  const isFolioHeader = (value) => {
+    const header = normalizeHeader(value);
+    if (!header) return false;
+    return [
+      "folio",
+      "folios",
+      "numerodefolio",
+      "numerofolio",
+      "nofolio",
+      "folioaxa",
+      "foliosaxa",
+      "foliosiniestro",
+      "foliosiniestros",
+      "siniestro",
+      "siniestros",
+      "reclamacion",
+      "numerodereclamacion",
+      "numeroreclamacion",
+      "noreclamacion",
+      "numerodetransaccion",
+      "numerotransaccion",
+      "transaccion",
+    ].includes(header) || header.includes("folio");
+  };
+
+  const seen = new Set();
+  const folios = [];
+
+  for (const sheetName of workbook.SheetNames) {
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+      header: 1,
+      raw: true,
+      defval: "",
+    });
+
+    rows.forEach((row, rowIndex) => {
+      const columns = (row || [])
+        .map((value, columnIndex) => (isFolioHeader(value) ? columnIndex : -1))
+        .filter((columnIndex) => columnIndex !== -1);
+      columns.forEach((column) => {
+        rows.slice(rowIndex + 1).forEach((dataRow) => {
+          const folio = excelFolioValueToText(dataRow?.[column]);
+          if (!folio || isFolioHeader(folio) || seen.has(folio)) return;
+          seen.add(folio);
+          folios.push(folio);
+        });
+      });
+    });
+  }
+
+  return folios;
 }
 
 function findExistingBitacoraEntry(entry) {
@@ -821,14 +1484,22 @@ function buildAuditMeta(input = {}, fallbackReason = "") {
 }
 
 function buildAuditMetaFromRequest(req, fallbackReason = "") {
+  const user = getRequestUser(req);
   return buildAuditMeta(
     {
       ...(req.body && !Buffer.isBuffer(req.body) ? req.body : {}),
       reason: req.body?.reason || req.body?.changeReason || req.get("x-change-reason") || fallbackReason,
-      changedBy: req.body?.changedBy || req.body?.operator || req.get("x-operator") || "Operador local",
+      changedBy: user ? (user.display_name || user.username) : req.body?.changedBy || req.body?.operator || req.get("x-operator") || "Operador local",
     },
     fallbackReason
   );
+}
+
+function applyLoggedUserCapture(entry, user) {
+  if (!entry || !user) return entry;
+  entry.createdByUserId = user.id;
+  entry.createdByName = user.display_name || user.username;
+  return entry;
 }
 
 function requireAuditReason(req, res) {
@@ -866,6 +1537,8 @@ function importBitacoraEntries(entries, audit = buildAuditMeta({}, "Importacion 
 }
 
 function recordBitacoraHistory(database, entryId, version, action, beforeEntry, afterEntry, audit = {}) {
+  const completeBefore = completeBitacoraTrackingFields(beforeEntry, afterEntry || {});
+  const completeAfter = completeBitacoraTrackingFields(afterEntry, beforeEntry || {});
   database
     .prepare(`
       INSERT INTO bitacora_history (
@@ -879,12 +1552,13 @@ function recordBitacoraHistory(database, entryId, version, action, beforeEntry, 
       nowIso(),
       normalizeText(audit.changedBy || "Sistema"),
       normalizeText(audit.reason),
-      beforeEntry ? JSON.stringify(beforeEntry) : null,
-      afterEntry ? JSON.stringify(afterEntry) : null
+      completeBefore ? JSON.stringify(completeBefore) : null,
+      completeAfter ? JSON.stringify(completeAfter) : null
     );
 }
 
 function readBitacoraHistory(entryId) {
+  const current = dbRowToBitacora(initDatabase().prepare("SELECT * FROM bitacora WHERE id = ?").get(entryId) || {});
   return initDatabase()
     .prepare("SELECT * FROM bitacora_history WHERE entry_id = ? ORDER BY version DESC, changed_at DESC")
     .all(entryId)
@@ -896,8 +1570,8 @@ function readBitacoraHistory(entryId) {
       changedAt: row.changed_at,
       changedBy: row.changed_by || "",
       reason: row.reason || "",
-      before: row.before_json ? JSON.parse(row.before_json) : null,
-      after: row.after_json ? JSON.parse(row.after_json) : null,
+      before: row.before_json ? completeBitacoraTrackingFields(JSON.parse(row.before_json), current) : null,
+      after: row.after_json ? completeBitacoraTrackingFields(JSON.parse(row.after_json), current) : null,
     }));
 }
 
@@ -919,12 +1593,14 @@ function insertBitacoraEntry(entry, action = "create", audit = buildAuditMeta({}
     database
     .prepare(`
       INSERT INTO bitacora (
-        id, dias_atraso, fecha_entrada_correo, fecha_entrega, tramite, estado, cliente,
-        poliza, aseguradora, descripcion, folio, comentarios, fecha_salida, responsable,
+        id, assigned_user_id, created_by_user_id, created_by_name, dias_atraso, fecha_entrada_correo, fecha_entrega, tramite, estado, cliente,
+        poliza, aseguradora, descripcion, folio, comentarios, responsable,
+        fecha_salida, ot_interna, ramo,
         version, archived_at, archived_reason, created_at, updated_at
       ) VALUES (
-        @id, @diasAtraso, @fechaEntradaCorreo, @fechaEntrega, @tramite, @estado, @cliente,
-        @poliza, @aseguradora, @descripcion, @folio, @comentarios, @fechaSalida, @responsable,
+        @id, @assignedUserId, @createdByUserId, @createdByName, @diasAtraso, @fechaEntradaCorreo, @fechaEntrega, @tramite, @estado, @cliente,
+        @poliza, @aseguradora, @descripcion, @folio, @comentarios, @responsable,
+        @fechaSalida, @otInterna, @ramo,
         @version, @archivedAt, @archivedReason, @createdAt, @updatedAt
       )
     `)
@@ -948,6 +1624,9 @@ function updateBitacoraEntry(entry, previous = null, action = "update", audit = 
     const result = database
     .prepare(`
       UPDATE bitacora SET
+        assigned_user_id = @assignedUserId,
+        created_by_user_id = @createdByUserId,
+        created_by_name = @createdByName,
         dias_atraso = @diasAtraso,
         fecha_entrada_correo = @fechaEntradaCorreo,
         fecha_entrega = @fechaEntrega,
@@ -961,6 +1640,8 @@ function updateBitacoraEntry(entry, previous = null, action = "update", audit = 
         comentarios = @comentarios,
         fecha_salida = @fechaSalida,
         responsable = @responsable,
+        ot_interna = @otInterna,
+        ramo = @ramo,
         version = @version,
         archived_at = @archivedAt,
         archived_reason = @archivedReason,
@@ -997,11 +1678,36 @@ function appendBitacoraFollowup(existing, followup, audit = {}) {
   const save = database.transaction(() => {
     recordBitacoraHistory(database, base.id, version, "followup", base, after, {
       ...audit,
-      reason: audit.reason || "Seguimiento capturado sin modificar registro base",
+      reason: audit.reason || "Seguimiento capturado y registro base actualizado",
     });
     database
-      .prepare("UPDATE bitacora SET version = ?, updated_at = ? WHERE id = ?")
-      .run(version, after.updatedAt, base.id);
+      .prepare(`
+        UPDATE bitacora SET
+          assigned_user_id = @assignedUserId,
+          created_by_user_id = @createdByUserId,
+          created_by_name = @createdByName,
+          dias_atraso = @diasAtraso,
+          fecha_entrada_correo = @fechaEntradaCorreo,
+          fecha_entrega = @fechaEntrega,
+          tramite = @tramite,
+          estado = @estado,
+          cliente = @cliente,
+          poliza = @poliza,
+          aseguradora = @aseguradora,
+          descripcion = @descripcion,
+          folio = @folio,
+          comentarios = @comentarios,
+          fecha_salida = @fechaSalida,
+          responsable = @responsable,
+          ot_interna = @otInterna,
+          ramo = @ramo,
+          version = @version,
+          archived_at = @archivedAt,
+          archived_reason = @archivedReason,
+          updated_at = @updatedAt
+        WHERE id = @id
+      `)
+      .run(after);
   });
   save();
 
@@ -1016,6 +1722,67 @@ function withMonitorSnapshot(entry, rows = runtime.data) {
     monitor: match.row || null,
     matchBy: match.matchBy || null,
   };
+}
+
+function repairMissingBitacoraTrackingFields(entries, monitorRows) {
+  if (!db || !Array.isArray(entries) || !entries.length) {
+    return entries;
+  }
+
+  const updates = [];
+  const repaired = entries.map((entry) => {
+    const next = {
+      ...entry,
+      otInterna: entry.otInterna || makeGeneratedOtInterna(entry),
+      ramo: normalizeRamo(entry.ramo),
+    };
+    if (next.otInterna !== entry.otInterna || next.ramo !== entry.ramo) {
+      updates.push(next);
+    }
+    return next;
+  });
+
+  if (updates.length) {
+    const update = initDatabase().transaction((items) => {
+      const statement = initDatabase().prepare(`
+        UPDATE bitacora
+        SET ot_interna = COALESCE(NULLIF(ot_interna, ''), @otInterna),
+            ramo = COALESCE(NULLIF(ramo, ''), @ramo),
+            updated_at = @updatedAt
+        WHERE id = @id
+      `);
+      const history = initDatabase().prepare(`
+        INSERT INTO bitacora_history (
+          entry_id, version, action, changed_at, changed_by, reason, before_json, after_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      for (const item of items) {
+        const beforeRow = initDatabase().prepare("SELECT * FROM bitacora WHERE id = ?").get(item.id);
+        if (!beforeRow) continue;
+        const before = dbRowToBitacora(beforeRow);
+        const after = {
+          ...before,
+          otInterna: before.otInterna || item.otInterna,
+          ramo: before.ramo || item.ramo,
+          updatedAt: nowIso(),
+        };
+        statement.run(after);
+        history.run(
+          after.id,
+          after.version,
+          "repair_tracking_fields",
+          after.updatedAt,
+          "Sistema",
+          "Ramo y OT interna completados automaticamente",
+          JSON.stringify(before),
+          JSON.stringify(after)
+        );
+      }
+    });
+    update(updates);
+  }
+
+  return repaired;
 }
 
 function archiveBitacoraEntry(id, audit = buildAuditMeta({}, "Archivado desde UI")) {
@@ -1170,7 +1937,8 @@ function buildBitacoraComparison(entries, monitorRows) {
   const indexes = buildMonitorIndexes(monitorRows);
   const matchedOts = new Set();
 
-  const activeEntries = (Array.isArray(entries) ? entries : []).filter((entry) => !entry.archivedAt);
+  const repairedEntries = repairMissingBitacoraTrackingFields(Array.isArray(entries) ? entries : [], monitorRows);
+  const activeEntries = repairedEntries.filter((entry) => !entry.archivedAt);
   const items = attachBitacoraHistoryMeta(activeEntries.map((entry) => {
     const match = findMonitorMatch(entry, indexes);
     if (match.row && match.row.ot) {
@@ -1186,9 +1954,17 @@ function buildBitacoraComparison(entries, monitorRows) {
             ot: match.row.ot,
             estatus: match.row.estatus,
             poliza: match.row.poliza,
+            usuarioCreador: match.row.usuarioCreador,
             agente: match.row.agente,
             contratante: match.row.contratante,
             tipoSolicitud: match.row.tipoSolicitud,
+            producto: match.row.producto,
+            guia: match.row.guia,
+            fechaRegistro: match.row.fechaRegistro,
+            primerIngreso: match.row.primerIngreso,
+            ultimoIngreso: match.row.ultimoIngreso,
+            medioApertura: match.row.medioApertura,
+            rol: match.row.rol,
             fechaCompromiso: match.row.fechaCompromiso,
           }
         : null,
@@ -1304,6 +2080,9 @@ function writeBitacoraExcel(comparison) {
     "Estado manual",
     "Estatus monitor",
     "Responsable",
+    "Capturado por",
+    "Ramo",
+    "OT interna",
     "Version",
     "Agente monitor",
     "Fecha entrada correo",
@@ -1332,6 +2111,9 @@ function writeBitacoraExcel(comparison) {
     item.estado,
     item.monitor?.estatus,
     item.responsable,
+    item.createdByName,
+    item.ramo,
+    item.otInterna,
     item.version,
     item.monitor?.agente,
     item.fechaEntradaCorreo,
@@ -1354,6 +2136,8 @@ function writeBitacoraExcel(comparison) {
     item.tramite,
     item.estado,
     item.responsable,
+    item.ramo,
+    item.otInterna,
     item.comentarios,
     item.archivedAt,
     item.archivedReason,
@@ -1394,6 +2178,9 @@ function writeBitacoraExcel(comparison) {
     "Cliente",
     "Estado",
     "Responsable",
+    "Capturado por",
+    "Ramo",
+    "OT interna",
     "Comentarios",
   ];
   const historyRows = initDatabase()
@@ -1415,6 +2202,9 @@ function writeBitacoraExcel(comparison) {
         snapshot.cliente,
         snapshot.estado,
         snapshot.responsable,
+        snapshot.createdByName,
+        snapshot.ramo,
+        snapshot.otInterna,
         snapshot.comentarios,
       ];
     });
@@ -1426,7 +2216,7 @@ function writeBitacoraExcel(comparison) {
     excelSheet("Bitacora", bitacoraHeaders, bitacoraRows),
     excelSheet(
       "Archivados",
-      ["Generado", "Folio / OT", "Poliza", "Cliente", "Tramite", "Estado", "Responsable", "Comentarios", "Archivado", "Motivo", "Actualizado"],
+      ["Generado", "Folio / OT", "Poliza", "Cliente", "Tramite", "Estado", "Responsable", "Ramo", "OT interna", "Comentarios", "Archivado", "Motivo", "Actualizado"],
       archivedRows
     ),
     excelSheet("Sin bitacora", sinBitacoraHeaders, sinBitacoraRows),
@@ -1641,6 +2431,22 @@ function mapItem(item) {
   };
 }
 
+function mapAxaItem(item) {
+  return {
+    ...mapItem(item),
+    aseguradora: "AXA",
+    fuente: "axa",
+  };
+}
+
+function normalizeMonitorRows(items, mapper = mapItem) {
+  return sortRows(
+    (Array.isArray(items) ? items : extractItems(items))
+      .map(mapper)
+      .filter((item) => normalizeText(item.ot))
+  );
+}
+
 function createEmptyDiff(totalActual = 0) {
   return {
     timestamp: null,
@@ -1660,12 +2466,13 @@ function createEmptyDiff(totalActual = 0) {
 }
 
 function sortRows(rows) {
+  // Optimizar sort: pre-calcular comparadores y usar Collator reutilizable
   return [...rows].sort((left, right) => {
     const first = parseDateForSort(left.fechaCompromiso) - parseDateForSort(right.fechaCompromiso);
     if (first !== 0) {
       return first;
     }
-    return normalizeText(left.ot).localeCompare(normalizeText(right.ot), "es");
+    return COLLATOR.compare(normalizeText(left.ot), normalizeText(right.ot));
   });
 }
 
@@ -1804,8 +2611,10 @@ function compareRows(previousRows, currentRows) {
 
     const changes = [];
     for (const field of fieldsToCheck) {
-      const before = normalizeText(previous[field]);
-      const after = normalizeText(current[field]);
+      const beforeVal = previous[field];
+      const afterVal = current[field];
+      const before = normalizeText(beforeVal);
+      const after = normalizeText(afterVal);
       if (before !== after) {
         changes.push({ field, before, after });
       }
@@ -1841,7 +2650,7 @@ function compareRows(previousRows, currentRows) {
     },
     nuevos: sortRows(nuevos),
     cambiados: cambiados.sort((left, right) =>
-      normalizeText(left.ot).localeCompare(normalizeText(right.ot), "es")
+      COLLATOR.compare(normalizeText(left.ot), normalizeText(right.ot))
     ),
     eliminados: sortRows(eliminados),
     iguales: sortRows(iguales),
@@ -1916,11 +2725,54 @@ const runtime = {
     nextTrigger: null,
     timer: null,
   },
+  siniestros: {
+    busy: false,
+    source: null,
+    startedAt: null,
+    endedAt: null,
+    total: 0,
+    completed: 0,
+    current: null,
+    results: [],
+    error: null,
+  },
+  axa: {
+    busy: false,
+    configured: false,
+    mode: "pending_config",
+    message: "Listo para conectar flujo AXA.",
+    error: null,
+    lastUpdate: readJsonSafe(CONFIG.axaDiffFile, {}).timestamp || null,
+    dataVersion: readJsonSafe(CONFIG.axaDiffFile, {}).timestamp || "initial",
+    data: readJsonSafe(CONFIG.axaCurrentFile, []),
+    diff: readJsonSafe(
+      CONFIG.axaDiffFile,
+      createEmptyDiff(readJsonSafe(CONFIG.axaCurrentFile, []).length)
+    ),
+    source: "pending_flow",
+  },
+  axaSiniestros: {
+    busy: false,
+    source: null,
+    startedAt: null,
+    endedAt: null,
+    total: 0,
+    completed: 0,
+    current: null,
+    results: [],
+    error: null,
+    url: CONFIG.axaSiniestrosUrl,
+  },
   validationWarnings: [],
   lastRunEndedAt: null,
   lastSuccessfulRunAt: null,
   lastFailedRunAt: null,
 };
+let activeSiniestrosPage = null;
+let activeMonitorPage = null;
+let activeAxaSiniestrosPage = null;
+let siniestrosBrowserContext = null;
+let axaSiniestrosBrowserContext = null;
 
 function assertNotCancelled() {
   if (runtime.cancelRequested) {
@@ -2081,7 +2933,7 @@ function applySecurityHeaders(_req, res, next) {
 
 function hasValidMonitorToken(req) {
   if (!CONFIG.monitorToken) {
-    return true;
+    return false;
   }
 
   const headerToken = req.get("x-monitor-token") || "";
@@ -2092,6 +2944,18 @@ function hasValidMonitorToken(req) {
 
 function requireMonitorToken(req, res, next) {
   if (hasValidMonitorToken(req)) {
+    req.user = {
+      id: "token-admin",
+      username: "monitor-token",
+      display_name: "Monitor Token",
+      role: "admin",
+    };
+    next();
+    return;
+  }
+
+  const user = getRequestUser(req);
+  if (user) {
     next();
     return;
   }
@@ -2099,24 +2963,47 @@ function requireMonitorToken(req, res, next) {
   res.status(401).json({
     ok: false,
     authRequired: true,
-    message: "Token local requerido. Configura MONITOR_TOKEN o envia X-Monitor-Token.",
+    message: "Inicia sesion o envia X-Monitor-Token.",
   });
 }
 
+function requireRole(...roles) {
+  return (req, res, next) => {
+    const user = req.user || getRequestUser(req);
+    if (!user) {
+      res.status(401).json({ ok: false, authRequired: true, message: "Inicia sesion." });
+      return;
+    }
+    if (!roles.includes(user.role)) {
+      res.status(403).json({ ok: false, message: "No tienes permisos para esta accion." });
+      return;
+    }
+    next();
+  };
+}
+
 function requireRemoteControlToken(req, res, next) {
-  if (!CONFIG.monitorToken) {
-    res.status(503).json({
-      ok: false,
-      message: "Configura MONITOR_TOKEN para habilitar la vista remota de login.",
-    });
+  if (getRequestUser(req)?.role === "admin" || hasValidMonitorToken(req)) {
+    requireMonitorToken(req, res, next);
     return;
   }
-  requireMonitorToken(req, res, next);
+  res.status(403).json({
+    ok: false,
+    message: "Solo admin puede controlar el login remoto.",
+  });
 }
 
 app.use(applySecurityHeaders);
 app.use(requireAllowedIp);
 app.use("/api/bitacora/import-excel", express.raw({
+  type: "application/octet-stream",
+  limit: "25mb",
+}));
+app.use("/api/siniestros/import-excel", express.raw({
+  type: "application/octet-stream",
+  limit: "25mb",
+}));
+app.use("/api/axa/siniestros/import-excel", express.raw({
   type: "application/octet-stream",
   limit: "25mb",
 }));
@@ -2135,6 +3022,9 @@ function validateConfig() {
   if (!CONFIG.consultaUrl.includes("/home/pagina-iframe")) {
     warnings.push("CONSULTA_URL no parece apuntar a la vista de consulta.");
   }
+  if (!CONFIG.siniestrosUrl.includes("/home/pagina-iframe")) {
+    warnings.push("SINIESTROS_URL no parece apuntar a la vista de consulta de siniestros.");
+  }
   if (!CONFIG.dashboardUrl.includes("/home/dashboard")) {
     warnings.push("DASHBOARD_URL/INICIO_URL no parece apuntar al dashboard principal.");
   }
@@ -2146,6 +3036,9 @@ function validateConfig() {
   }
   if (!CONFIG.allowedIps.length && !isLocalHost(CONFIG.host)) {
     warnings.push("ALLOWED_IPS no esta configurado y HOST permite acceso fuera de localhost.");
+  }
+  if (!process.env.ADMIN_PASSWORD && !CONFIG.monitorToken) {
+    warnings.push("ADMIN_PASSWORD no esta configurado; se creo admin inicial con contrasena 'admin'. Cambiala en .env.");
   }
   if (CONFIG.trustProxy && !CONFIG.allowedIps.length) {
     warnings.push("TRUST_PROXY esta activo, pero ALLOWED_IPS no esta configurado.");
@@ -2254,6 +3147,24 @@ function describeTarget(target) {
     return target.url();
   }
   return "page";
+}
+
+function pageMatchesConfiguredRoute(url, configuredUrl) {
+  try {
+    const current = new URL(url);
+    const configured = new URL(configuredUrl);
+    if (current.origin !== configured.origin || current.pathname !== configured.pathname) {
+      return false;
+    }
+
+    const configuredTipo = configured.searchParams.get("tipo");
+    const configuredMenu = configured.searchParams.get("menu");
+    const currentTipo = current.searchParams.get("tipo");
+    const currentMenu = current.searchParams.get("menu");
+    return (!configuredTipo || currentTipo === configuredTipo) && (!configuredMenu || currentMenu === configuredMenu);
+  } catch {
+    return normalizeText(url).includes(normalizeText(configuredUrl));
+  }
 }
 
 async function getWorkflowTarget(page) {
@@ -2592,12 +3503,65 @@ async function describePageHealth(page) {
 
 async function closeBrowserContext(reason = "reinicio solicitado") {
   const context = runtime.browserContext;
+  const siniestrosContext = siniestrosBrowserContext;
+  const axaSiniestrosContext = axaSiniestrosBrowserContext;
   runtime.browserContext = null;
+  siniestrosBrowserContext = null;
+  axaSiniestrosBrowserContext = null;
   runtime.page = null;
+  activeMonitorPage = null;
+  activeSiniestrosPage = null;
+  activeAxaSiniestrosPage = null;
 
   if (context) {
-    pushLog("browser", `Cerrando navegador: ${reason}.`);
+    pushLog("browser", `Cerrando navegador Monitor: ${reason}.`);
     await context.close().catch(() => {});
+  }
+  if (siniestrosContext) {
+    pushLog("browser", `Cerrando navegador Siniestros: ${reason}.`);
+    await siniestrosContext.close().catch(() => {});
+  }
+  if (axaSiniestrosContext) {
+    pushLog("browser", `Cerrando navegador Siniestros AXA: ${reason}.`);
+    await axaSiniestrosContext.close().catch(() => {});
+  }
+}
+
+function terminateEdgeProcessesForProfile(profileDir, reason = "perfil bloqueado") {
+  if (process.platform !== "win32" || !profileDir) {
+    return 0;
+  }
+  try {
+    const script = `
+      $profile = [System.IO.Path]::GetFullPath($env:GNP_PROFILE_DIR).TrimEnd('\\')
+      $escaped = [Regex]::Escape($profile)
+      $processes = Get-CimInstance Win32_Process -Filter "name='msedge.exe'" |
+        Where-Object { $_.CommandLine -and ([Regex]::IsMatch($_.CommandLine, '--user-data-dir="?'+$escaped+'"?', 'IgnoreCase') -or $_.CommandLine -like "*$profile*") }
+      foreach ($process in $processes) {
+        Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+      }
+      ($processes | Measure-Object).Count
+    `;
+    const output = execFileSync("powershell.exe", ["-NoProfile", "-Command", script], {
+      encoding: "utf8",
+      env: { ...process.env, GNP_PROFILE_DIR: profileDir },
+      windowsHide: true,
+    });
+    const count = Number(String(output || "").trim()) || 0;
+    if (count > 0) {
+      pushLog("browser", "Se cerraron procesos Edge usando el perfil persistente.", {
+        count,
+        reason,
+        profileDir,
+      });
+    }
+    return count;
+  } catch (error) {
+    pushLog("browser", "No pude cerrar procesos Edge del perfil persistente.", {
+      error: serializeError(error),
+      profileDir,
+    });
+    return 0;
   }
 }
 
@@ -2813,15 +3777,7 @@ async function recoverConsultaPage(page, reason) {
   throw new Error(`La pagina de consulta no cargo despues de ${CONFIG.pageRecoveryAttempts} intentos de recuperacion.`);
 }
 
-async function getContext() {
-  if (runtime.browserContext) {
-    if (!runtime.page || runtime.page.isClosed()) {
-      runtime.page = runtime.browserContext.pages()[0] || (await runtime.browserContext.newPage());
-    }
-    await preparePageForUse(runtime.page);
-    return runtime.browserContext;
-  }
-
+function buildBrowserLaunchOptions() {
   const launchOptions = {
     headless: CONFIG.headless,
     viewport: { width: 1600, height: 900 },
@@ -2835,10 +3791,43 @@ async function getContext() {
   if (CONFIG.browserChannel) {
     launchOptions.channel = CONFIG.browserChannel;
   }
+  return launchOptions;
+}
 
-  runtime.browserContext = await chromium.launchPersistentContext(CONFIG.profileDir, launchOptions);
+async function launchPersistentContextWithProfileRecovery(profileDir, label = "Monitor") {
+  terminateEdgeProcessesForProfile(profileDir, `inicio ${label}`);
+  try {
+    return await chromium.launchPersistentContext(profileDir, buildBrowserLaunchOptions());
+  } catch (error) {
+    const detail = String(error?.message || "");
+    const profileConflict = /Abriendo en la sesi|browser has been closed|Target page, context or browser has been closed/i.test(detail);
+    if (!profileConflict) {
+      throw error;
+    }
+    pushLog("browser", `Reintentando apertura de ${label} por perfil bloqueado.`, {
+      error: serializeError(error),
+      profileDir,
+    });
+    terminateEdgeProcessesForProfile(profileDir, `reintento ${label}`);
+    return await chromium.launchPersistentContext(profileDir, buildBrowserLaunchOptions());
+  }
+}
+
+async function getContext() {
+  if (runtime.browserContext) {
+    if (!runtime.page || runtime.page.isClosed()) {
+      runtime.page = activeMonitorPage && !activeMonitorPage.isClosed()
+        ? activeMonitorPage
+        : runtime.browserContext.pages()[0] || (await runtime.browserContext.newPage());
+    }
+    await preparePageForUse(runtime.page);
+    return runtime.browserContext;
+  }
+
+  runtime.browserContext = await launchPersistentContextWithProfileRecovery(CONFIG.profileDir, "Monitor");
 
   runtime.page = runtime.browserContext.pages()[0] || (await runtime.browserContext.newPage());
+  activeMonitorPage = runtime.page;
   await preparePageForUse(runtime.page);
 
   runtime.browserContext.on("page", (page) => {
@@ -2849,42 +3838,81 @@ async function getContext() {
   return runtime.browserContext;
 }
 
+async function getSiniestrosContext() {
+  if (siniestrosBrowserContext) {
+    if (!activeSiniestrosPage || activeSiniestrosPage.isClosed()) {
+      activeSiniestrosPage = siniestrosBrowserContext.pages()[0] || (await siniestrosBrowserContext.newPage());
+    }
+    await preparePageForUse(activeSiniestrosPage);
+    return siniestrosBrowserContext;
+  }
+
+  siniestrosBrowserContext = await launchPersistentContextWithProfileRecovery(CONFIG.siniestrosProfileDir, "Siniestros");
+  activeSiniestrosPage = siniestrosBrowserContext.pages()[0] || (await siniestrosBrowserContext.newPage());
+  await preparePageForUse(activeSiniestrosPage);
+
+  siniestrosBrowserContext.on("page", (page) => {
+    void preparePageForUse(page);
+  });
+
+  pushLog("browser", "Se abrio el navegador persistente para Siniestros.", {
+    profileDir: CONFIG.siniestrosProfileDir,
+  });
+  return siniestrosBrowserContext;
+}
+
+async function getAxaSiniestrosContext() {
+  if (axaSiniestrosBrowserContext) {
+    if (!activeAxaSiniestrosPage || activeAxaSiniestrosPage.isClosed()) {
+      activeAxaSiniestrosPage = axaSiniestrosBrowserContext.pages()[0] || (await axaSiniestrosBrowserContext.newPage());
+    }
+    await preparePageForUse(activeAxaSiniestrosPage);
+    return axaSiniestrosBrowserContext;
+  }
+
+  axaSiniestrosBrowserContext = await launchPersistentContextWithProfileRecovery(
+    CONFIG.axaSiniestrosProfileDir,
+    "Siniestros AXA"
+  );
+  activeAxaSiniestrosPage = axaSiniestrosBrowserContext.pages()[0] || (await axaSiniestrosBrowserContext.newPage());
+  await preparePageForUse(activeAxaSiniestrosPage);
+
+  axaSiniestrosBrowserContext.on("page", (page) => {
+    activeAxaSiniestrosPage = page;
+    void preparePageForUse(page);
+  });
+
+  pushLog("browser", "Se abrio el navegador persistente para Siniestros AXA.", {
+    profileDir: CONFIG.axaSiniestrosProfileDir,
+  });
+  return axaSiniestrosBrowserContext;
+}
+
 async function getActivePage() {
   await getContext();
 
   const pages = runtime.browserContext.pages().filter((page) => !page.isClosed());
   const currentPage =
-    runtime.page && !runtime.page.isClosed()
-      ? runtime.page
-      : pages.find((page) => /gnp\.com\.mx|portalintermediarios/i.test(page.url())) ||
-        pages[0] ||
+    activeMonitorPage && !activeMonitorPage.isClosed()
+      ? activeMonitorPage
+      : pages.find((page) => pageMatchesConfiguredRoute(page.url(), CONFIG.consultaUrl)) ||
+        pages.find((page) => {
+          const url = page.url();
+          return /portalintermediarios\.gnp\.com\.mx/i.test(url) && !pageMatchesConfiguredRoute(url, CONFIG.siniestrosUrl);
+        }) ||
         (await runtime.browserContext.newPage());
 
-  for (const page of runtime.browserContext.pages()) {
-    if (page !== currentPage && !page.isClosed()) {
-      try {
-        const url = page.url();
-        const shouldClose =
-          url === "about:blank" ||
-          (url === currentPage.url() && /gnp\.com\.mx|portalintermediarios/i.test(url));
-
-        if (shouldClose) {
-          await page.close();
-        }
-      } catch {}
-    }
-  }
-
   await preparePageForUse(currentPage);
+  activeMonitorPage = currentPage;
   runtime.page = currentPage;
   return runtime.page;
 }
 
-async function verifyExistingSession(page) {
+async function verifyExistingSession(page, checkUrl = CONFIG.consultaUrl) {
   setState("checking_session", "Revisando si la sesion guardada sigue viva...");
   pushLog("session", "Revisando si la sesion guardada sigue viva...");
 
-  await page.goto(CONFIG.consultaUrl, { waitUntil: "domcontentloaded" });
+  await page.goto(checkUrl, { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForTimeout(1500);
 
@@ -3124,8 +4152,8 @@ async function startAssistedLogin() {
   };
 }
 
-async function ensureLoggedIn(page) {
-  const alive = await verifyExistingSession(page);
+async function ensureLoggedIn(page, checkUrl = CONFIG.consultaUrl) {
+  const alive = await verifyExistingSession(page, checkUrl);
   if (alive) {
     pushLog("session", "La sesion persistente sigue activa.");
     return page;
@@ -3219,6 +4247,7 @@ async function gotoConsulta(page) {
     note: "Dentro de la ventana de consulta.",
   });
 
+  activeMonitorPage = page;
   return page;
 }
 
@@ -4479,6 +5508,28 @@ function buildGetPendientesUrl(params) {
   return url.toString();
 }
 
+function extractUrlQueryParams(value) {
+  const params = {};
+  const collect = (search) => {
+    for (const [key, paramValue] of new URLSearchParams(search).entries()) {
+      if (!params[key]) {
+        params[key] = paramValue;
+      }
+    }
+  };
+
+  try {
+    const url = new URL(value);
+    collect(url.search);
+    const hashQueryIndex = url.hash.indexOf("?");
+    if (hashQueryIndex >= 0) {
+      collect(url.hash.slice(hashQueryIndex + 1));
+    }
+  } catch {}
+
+  return params;
+}
+
 async function readAngularQueryContext(page) {
   try {
     const info = await page.evaluate(() => {
@@ -4580,11 +5631,12 @@ async function readConsultaIframeInfo(page) {
       }
 
       const url = new URL(targetUrl);
+      const params = extractUrlQueryParams(targetUrl);
       const info = {
         src: url.toString(),
         origin: url.origin,
         pathname: url.pathname,
-        ...Object.fromEntries(url.searchParams.entries()),
+        ...params,
       };
 
       pushLog("query", "App de consulta detectada en frame.", {
@@ -4614,7 +5666,7 @@ async function readConsultaIframeInfo(page) {
       }
 
       const url = new URL(src);
-      const entries = Object.fromEntries(url.searchParams.entries());
+      const entries = extractUrlQueryParams(src);
       return {
         src: url.toString(),
         origin: url.origin,
@@ -4642,11 +5694,12 @@ async function readConsultaIframeInfo(page) {
     }
 
     const url = new URL(match[1]);
+    const params = extractUrlQueryParams(match[1]);
     const info = {
       src: url.toString(),
       origin: url.origin,
       pathname: url.pathname,
-      ...Object.fromEntries(url.searchParams.entries()),
+      ...params,
     };
 
     pushLog("query", "Iframe de consulta detectado por HTML.", {
@@ -4926,6 +5979,97 @@ function persistRunData(result, currentRows, diff) {
   writeBitacoraExcel(comparison);
 }
 
+function normalizeOpenWaChatId(value) {
+  const text = normalizeText(value);
+  if (!text) return "";
+  if (text.includes("@")) return text;
+  const digits = text.replace(/\D/g, "");
+  return digits ? `${digits}@c.us` : "";
+}
+
+function buildOpenWaStatusMessage(change) {
+  const statusChange = (change.changes || []).find((item) => item.field === "estatus");
+  const current = change.current || {};
+  const previous = change.previous || {};
+  return [
+    "Monitor GNP - cambio de estatus",
+    `OT: ${displayValueForMessage(current.ot || change.ot)}`,
+    `Antes: ${displayValueForMessage(statusChange?.before || previous.estatus)}`,
+    `Ahora: ${displayValueForMessage(statusChange?.after || current.estatus)}`,
+    `Contratante: ${displayValueForMessage(current.contratante || previous.contratante)}`,
+    `Poliza: ${displayValueForMessage(current.poliza || previous.poliza)}`,
+    `Compromiso: ${displayValueForMessage(current.fechaCompromiso || previous.fechaCompromiso)}`,
+    `Hora: ${new Date().toLocaleString("es-MX")}`,
+  ].join("\n");
+}
+
+function displayValueForMessage(value) {
+  const text = normalizeText(value);
+  return text || "-";
+}
+
+async function sendOpenWaText(chatId, text) {
+  const url = `${CONFIG.openWaBaseUrl}/sessions/${encodeURIComponent(CONFIG.openWaSessionId)}/messages/send-text`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": CONFIG.openWaApiKey,
+    },
+    body: JSON.stringify({ chatId, text }),
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`OpenWA HTTP ${response.status}: ${detail.slice(0, 180)}`);
+  }
+  return response.json().catch(() => ({}));
+}
+
+async function notifyOpenWaStatusChanges(diff) {
+  if (!CONFIG.openWaEnabled) return;
+  if (!CONFIG.openWaBaseUrl || !CONFIG.openWaApiKey || !CONFIG.openWaSessionId || !CONFIG.openWaChatIds.length) {
+    pushLog("openwa", "OpenWA habilitado pero incompleto. Revisa OPENWA_BASE_URL, OPENWA_API_KEY, OPENWA_SESSION_ID y OPENWA_CHAT_IDS.", {
+      error: true,
+    });
+    return;
+  }
+
+  const statusChanges = (diff.cambiados || [])
+    .filter((change) => (change.changes || []).some((item) => item.field === "estatus"))
+    .slice(0, CONFIG.openWaMaxChanges);
+  if (!statusChanges.length) return;
+
+  const chatIds = CONFIG.openWaChatIds.map(normalizeOpenWaChatId).filter(Boolean);
+  if (!chatIds.length) {
+    pushLog("openwa", "OPENWA_CHAT_IDS no contiene destinatarios validos.", { error: true });
+    return;
+  }
+
+  let sent = 0;
+  for (const change of statusChanges) {
+    const message = buildOpenWaStatusMessage(change);
+    for (const chatId of chatIds) {
+      try {
+        await sendOpenWaText(chatId, message);
+        sent += 1;
+      } catch (error) {
+        pushLog("openwa", "No pude enviar notificacion de WhatsApp.", {
+          error: serializeError(error),
+          chatId,
+          ot: change.ot,
+        });
+      }
+    }
+  }
+
+  if (sent) {
+    pushLog("openwa", "Notificaciones de WhatsApp enviadas.", {
+      cambiosEstatus: statusChanges.length,
+      mensajes: sent,
+    });
+  }
+}
+
 async function waitForCapturedRows(capture, page, timeout = 12000) {
   const captured = await Promise.race([
     capture.promise,
@@ -4963,6 +6107,19 @@ async function fetchCurrentRows(page, context) {
   context = runtime.browserContext || context;
   let capture = createGetPendientesCapture(context);
   let normalQueryResult = null;
+  const knownRowsByKey = new Map();
+  for (const row of [
+    ...readJsonSafe(CONFIG.currentFile, []),
+    ...readJsonSafe(CONFIG.previousFile, []),
+  ]) {
+    const key = makeKey(row);
+    if (key && !knownRowsByKey.has(key)) {
+      knownRowsByKey.set(key, row);
+    }
+  }
+  const knownOpenRows = filterArchivedMonitorRows([...knownRowsByKey.values()])
+    .filter((row) => !isTerminada(row));
+  const getOpenFallbackRows = () => normalQueryResult?.rows || knownOpenRows;
 
   try {
     // Primera consulta inicial: normalmente GNP trae un rango amplio.
@@ -5032,7 +6189,7 @@ async function fetchCurrentRows(page, context) {
       if (searchedWithDates) {
         const result = await waitForCapturedRows(capture, page, 15000);
         if (result) {
-          const rows = mergeCurrentMonthWithOpenOlderRows(result.rows, normalQueryResult?.rows || []);
+          const rows = mergeCurrentMonthWithOpenOlderRows(result.rows, getOpenFallbackRows());
           const extraOpenRows = rows.length - result.rows.length;
           pushLog("query", "Consulta del mes actual completada.", {
             start: currentMonthRange.displayStart,
@@ -5048,6 +6205,7 @@ async function fetchCurrentRows(page, context) {
             debug: {
               ...result.debug,
               normalQueryRows: normalQueryResult?.rows?.length || 0,
+              previousOpenFallbackRows: normalQueryResult ? 0 : knownOpenRows.length,
               currentMonthRows: result.rows.length,
               extraOpenRows: Math.max(extraOpenRows, 0),
               effectiveRows: rows.length,
@@ -5063,7 +6221,7 @@ async function fetchCurrentRows(page, context) {
     try {
       const result = await waitForCapturedRows(capture, page, 12000);
       if (result) {
-        const rows = mergeCurrentMonthWithOpenOlderRows(result.rows, normalQueryResult?.rows || []);
+        const rows = mergeCurrentMonthWithOpenOlderRows(result.rows, getOpenFallbackRows());
         const extraOpenRows = rows.length - result.rows.length;
 
         return {
@@ -5072,6 +6230,7 @@ async function fetchCurrentRows(page, context) {
           debug: {
             ...result.debug,
             normalQueryRows: normalQueryResult?.rows?.length || 0,
+            previousOpenFallbackRows: normalQueryResult ? 0 : knownOpenRows.length,
             currentMonthRows: result.rows.length,
             extraOpenRows: Math.max(extraOpenRows, 0),
             effectiveRows: rows.length,
@@ -5086,7 +6245,7 @@ async function fetchCurrentRows(page, context) {
       context = runtime.browserContext || context;
       const resultAfterBuscar = await waitForCapturedRows(capture, page, 15000);
       if (resultAfterBuscar) {
-        const rows = mergeCurrentMonthWithOpenOlderRows(resultAfterBuscar.rows, normalQueryResult?.rows || []);
+        const rows = mergeCurrentMonthWithOpenOlderRows(resultAfterBuscar.rows, getOpenFallbackRows());
         const extraOpenRows = rows.length - resultAfterBuscar.rows.length;
 
         return {
@@ -5095,6 +6254,7 @@ async function fetchCurrentRows(page, context) {
           debug: {
             ...resultAfterBuscar.debug,
             normalQueryRows: normalQueryResult?.rows?.length || 0,
+            previousOpenFallbackRows: normalQueryResult ? 0 : knownOpenRows.length,
             currentMonthRows: resultAfterBuscar.rows.length,
             extraOpenRows: Math.max(extraOpenRows, 0),
             effectiveRows: rows.length,
@@ -5114,7 +6274,7 @@ async function fetchCurrentRows(page, context) {
       }
 
       return {
-        rows: mergeCurrentMonthWithOpenOlderRows(scrapedRows, normalQueryResult?.rows || []),
+        rows: mergeCurrentMonthWithOpenOlderRows(scrapedRows, getOpenFallbackRows()),
         raw: {
           source: "scraping",
           capturedAt: nowIso(),
@@ -5200,6 +6360,709 @@ async function fetchCurrentRowsWithRecovery(page, context) {
   throw lastError || new Error("La consulta visual fallo despues de reintentos.");
 }
 
+async function fillSiniestrosAutocomplete(page, selector, value) {
+  const field = await findVisibleLocator(page, [selector], 15000);
+  if (!field) {
+    throw new Error(`No encontre el campo ${selector} en Expediente Digital.`);
+  }
+
+  await field.locator.scrollIntoViewIfNeeded().catch(() => {});
+  await field.locator.click({ timeout: 2000 });
+  await field.locator.fill("");
+  await field.locator.type(value, { delay: 30 });
+  await field.locator.evaluate((node) => {
+    node.dispatchEvent(new Event("input", { bubbles: true }));
+  }).catch(() => {});
+  await page.waitForTimeout(500);
+  await field.locator.press("ArrowDown").catch(() => {});
+  await field.locator.press("Enter").catch(() => {});
+  await field.locator.evaluate((node) => {
+    node.dispatchEvent(new Event("change", { bubbles: true }));
+    node.dispatchEvent(new Event("blur", { bubbles: true }));
+  }).catch(() => {});
+  await page.waitForTimeout(500);
+}
+
+function saveSiniestrosPdf(folio, buffer) {
+  const cleanFolio = normalizeText(folio).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 60) || "folio";
+  const id = `${Date.now()}-${cleanFolio}.pdf`;
+  fs.writeFileSync(path.join(CONFIG.siniestrosPdfDir, id), buffer);
+  const files = fs
+    .readdirSync(CONFIG.siniestrosPdfDir)
+    .filter((name) => name.toLowerCase().endsWith(".pdf"))
+    .map((name) => {
+      const file = path.join(CONFIG.siniestrosPdfDir, name);
+      return { name, time: fs.statSync(file).mtimeMs };
+    })
+    .sort((left, right) => right.time - left.time);
+  files.slice(50).forEach((item) => fs.unlinkSync(path.join(CONFIG.siniestrosPdfDir, item.name)));
+  return id;
+}
+
+function createSiniestrosOutcomeCapture(page, context) {
+  let resolvePdf;
+  const pdfPromise = new Promise((resolve) => {
+    resolvePdf = resolve;
+  });
+  let settled = false;
+  const pagesWithDownloadListener = new Set();
+
+  const resolveOnce = (value) => {
+    if (settled) return;
+    settled = true;
+    resolvePdf(value);
+  };
+
+  const onResponse = async (response) => {
+    const headers = response.headers();
+    const contentType = String(headers["content-type"] || "").toLowerCase();
+    const disposition = String(headers["content-disposition"] || "").toLowerCase();
+    if (!contentType.includes("application/pdf") && !disposition.includes(".pdf")) {
+      return;
+    }
+    const buffer = await response.body().catch(() => null);
+    if (buffer?.length) {
+      resolveOnce({ buffer, source: "response" });
+    }
+  };
+  const onDownload = async (download) => {
+    const file = await download.path().catch(() => null);
+    if (!file) return;
+    const buffer = fs.readFileSync(file);
+    if (buffer.length) {
+      resolveOnce({ buffer, source: "download" });
+    }
+  };
+  const attachDownloadListener = (downloadPage) => {
+    if (!downloadPage || pagesWithDownloadListener.has(downloadPage)) return;
+    pagesWithDownloadListener.add(downloadPage);
+    downloadPage.on("download", onDownload);
+  };
+  const onNewPage = (newPage) => {
+    attachDownloadListener(newPage);
+  };
+
+  context.on("response", onResponse);
+  context.on("page", onNewPage);
+  attachDownloadListener(page);
+  return {
+    pdfPromise,
+    cleanup() {
+      context.off("response", onResponse);
+      context.off("page", onNewPage);
+      for (const downloadPage of pagesWithDownloadListener) {
+        downloadPage.off("download", onDownload);
+      }
+    },
+  };
+}
+
+async function readSiniestrosPortalError(page) {
+  for (const target of getSearchTargets(page)) {
+    const bodyText = normalizeText(await target.locator("body").innerText({ timeout: 500 }).catch(() => ""));
+    const match = bodyText.match(/ERROR AL CONSULTAR SINIESTRO POR IDTRANSACCION/i);
+    if (match) {
+      return match[0];
+    }
+  }
+  return "";
+}
+
+async function waitForSiniestrosDocumentOutcome(page, capture, folio, timeout = 15000) {
+  const deadline = Date.now() + timeout;
+  try {
+    while (Date.now() < deadline) {
+      assertNotCancelled();
+      const pdf = await Promise.race([
+        capture.pdfPromise,
+        page.waitForTimeout(350).then(() => null),
+      ]);
+      if (pdf?.buffer?.length) {
+        return {
+          status: "pdf",
+          ok: true,
+          pdfId: saveSiniestrosPdf(folio, pdf.buffer),
+          message: "PDF disponible.",
+        };
+      }
+
+      const portalError = await readSiniestrosPortalError(page);
+      if (portalError) {
+        return {
+          status: "portal_error",
+          ok: false,
+          message: portalError,
+        };
+      }
+    }
+
+    return {
+      status: "unknown",
+      ok: false,
+      message: "El portal no mostro PDF ni un mensaje de error reconocido.",
+    };
+  } finally {
+    capture.cleanup();
+  }
+}
+
+async function waitForSiniestrosSearchResult(page, timeout = 15000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    assertNotCancelled();
+    const portalError = await readSiniestrosPortalError(page);
+    if (portalError) {
+      return { status: "portal_error", ok: false, message: portalError };
+    }
+
+    for (const target of getSearchTargets(page)) {
+      const table = target.locator(SINIESTROS_SELECTORS.tablaResultados).first();
+      if (!(await table.isVisible().catch(() => false))) {
+        continue;
+      }
+      const rows = table.locator("tbody tr:not(.vacioLinea)");
+      const rowCount = await rows.count().catch(() => 0);
+      if (rowCount > 0) {
+        return { status: "result", ok: true, target, row: rows.first() };
+      }
+      const text = normalizeText(await table.innerText({ timeout: 800 }).catch(() => ""));
+      if (text.includes("---")) {
+        return { status: "no_results", ok: false, message: "0 Resultado(s) para el folio." };
+      }
+    }
+
+    if (page.url() === "about:blank") {
+      return { status: "blank", ok: false, message: "La vista de Siniestros quedo en blanco despues de buscar." };
+    }
+    await page.waitForTimeout(350);
+  }
+  return { status: "unknown", ok: false, message: "El portal no mostro resultados ni un mensaje de error reconocido." };
+}
+
+async function gotoSiniestros(page) {
+  setState("siniestros", "Abriendo Expediente Digital - Siniestros...");
+  await preparePageForUse(page);
+  await page.goto(CONFIG.siniestrosUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+  await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(1200);
+  await dismissBlockingOverlays(page);
+
+  if (!(await appearsLoggedIn(page))) {
+    throw new Error("La sesion se perdio al entrar a Siniestros.");
+  }
+
+  const field = await findVisibleLocator(page, [SINIESTROS_SELECTORS.ramo], 20000);
+  if (!field) {
+    throw new Error("No aparecio el campo Ramo en la vista de Siniestros.");
+  }
+
+  saveSessionInfo({
+    alive: true,
+    lastCheckedAt: nowIso(),
+    lastUrl: page.url(),
+    note: "Dentro de Expediente Digital - Siniestros.",
+  });
+  return page;
+}
+
+async function triggerSiniestrosBuscar(page, folio) {
+  for (const target of getSearchTargets(page)) {
+    const triggered = await target.evaluate(({ numeroTransaccion }) => {
+      const jq = window.jQuery || window.$;
+      if (!jq) return false;
+
+      const component = jq("#ecExpedienteDigital").first();
+      if (!component.length) return false;
+
+      const event = jq.Event("ecExpedienteDigital_BuscaSiniestro_Buscar");
+      event.data_set = { esNumeroTransaccion_txt: numeroTransaccion };
+      component.trigger(event);
+      return true;
+    }, { numeroTransaccion: folio }).catch(() => false);
+
+    if (triggered) {
+      pushLog("siniestros", "Busqueda activada por evento del componente Expediente Digital.");
+      return true;
+    }
+  }
+
+  for (const target of getSearchTargets(page)) {
+    const exact = target.locator("#esBuscar_btnesBuscar_btn").first();
+    if (await exact.count().catch(() => 0)) {
+      const clicked = await clickLocator(exact);
+      pushLog("siniestros", "Respaldo: intento de clic en Buscar por selector exacto.", {
+        selector: "#esBuscar_btnesBuscar_btn",
+        clicked,
+      });
+      return clicked;
+    }
+  }
+
+  const fallback = await findVisibleLocator(page, SINIESTROS_SELECTORS.buscar, 10000, true);
+  if (!fallback) {
+    return false;
+  }
+  const clicked = await clickLocator(fallback.locator);
+  pushLog("siniestros", "Respaldo: intento de clic en Buscar por selector alterno.", {
+    selector: fallback.selector,
+    clicked,
+  });
+  return clicked;
+}
+
+async function clickSiniestrosVerDocumentos(page) {
+  const button = await findVisibleLocator(page, SINIESTROS_SELECTORS.verDocumentos, 8000, true);
+  if (!button) {
+    return false;
+  }
+  const clicked = await clickLocator(button.locator);
+  pushLog("siniestros", "Intento de clic en Ver documentos.", {
+    selector: button.selector,
+    clicked,
+  });
+  return clicked;
+}
+
+async function searchSiniestroFolio(page, folio) {
+  page = await gotoSiniestros(page);
+  assertNotCancelled();
+
+  await fillSiniestrosAutocomplete(page, SINIESTROS_SELECTORS.ramo, "GMM");
+  await fillSiniestrosAutocomplete(page, SINIESTROS_SELECTORS.criterio, "N\u00famero de transacci\u00f3n");
+
+  const numberField = await findVisibleLocator(page, [SINIESTROS_SELECTORS.numeroTransaccion], 15000);
+  if (!numberField) {
+    throw new Error("No aparecio el campo Numero de transaccion.");
+  }
+  await fillLocatorValue(numberField.locator, folio);
+
+  if (!(await triggerSiniestrosBuscar(page, folio))) {
+    throw new Error("No pude activar la busqueda de siniestros.");
+  }
+
+  const searchResult = await waitForSiniestrosSearchResult(page);
+  if (searchResult.status !== "result") {
+    return { page, outcome: searchResult };
+  }
+
+  await clickLocator(searchResult.row);
+  await page.waitForTimeout(500);
+  const capture = createSiniestrosOutcomeCapture(page, page.context());
+  if (!(await clickSiniestrosVerDocumentos(page))) {
+    capture.cleanup();
+    return {
+      page,
+      outcome: {
+        status: "document_unavailable",
+        ok: false,
+        message: "Se encontro el resultado, pero Ver documentos no se habilito.",
+      },
+    };
+  }
+
+  const outcome = await waitForSiniestrosDocumentOutcome(page, capture, folio);
+  return { page, outcome };
+}
+
+async function gotoAxaSiniestros(page) {
+  setState("siniestros", "Abriendo Consulta Express AXA...");
+  await preparePageForUse(page);
+  await page.goto(CONFIG.axaSiniestrosUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
+  await page.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
+  await page.waitForTimeout(800);
+
+  const field = await findVisibleLocator(page, AXA_SINIESTROS_SELECTORS.folio, 25000);
+  if (!field) {
+    throw new Error("No aparecio el campo Numero de Folio en Consulta Express AXA.");
+  }
+
+  return page;
+}
+
+async function readAxaSiniestrosValidation(page) {
+  for (const selector of AXA_SINIESTROS_SELECTORS.mensajeReclamacion) {
+    const text = normalizeText(await page.locator(selector).first().innerText({ timeout: 500 }).catch(() => ""));
+    if (text) return text;
+  }
+  return "";
+}
+
+async function waitForAxaConsultButton(page, timeout = 12000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    assertNotCancelled();
+    const inputReady = await page.locator(AXA_SINIESTROS_SELECTORS.folio.join(", ")).first().evaluate((node) => {
+      const className = String(node.className || "");
+      return className.includes("input-success") || className.includes("success");
+    }).catch(() => false);
+    const blockedVisible = await page.locator(AXA_SINIESTROS_SELECTORS.consultarBloqueado.join(", ")).first()
+      .isVisible()
+      .catch(() => false);
+    for (const selector of AXA_SINIESTROS_SELECTORS.consultar) {
+      const locator = page.locator(selector).first();
+      if (!(await locator.count().catch(() => 0))) continue;
+      const visible = await locator.isVisible().catch(() => false);
+      const enabled = await locator.isEnabled().catch(() => true);
+      const box = await locator.boundingBox().catch(() => null);
+      if (visible && enabled && box && (inputReady || !blockedVisible)) {
+        return locator;
+      }
+    }
+
+    const validation = await readAxaSiniestrosValidation(page);
+    if (validation) {
+      throw new Error(validation);
+    }
+    await page.waitForTimeout(300);
+  }
+  throw new Error("AXA no habilito el boton Consultar despues de salir del campo de folio.");
+}
+
+async function fillAxaSiniestroFolio(page, folio) {
+  const field = await findVisibleLocator(page, AXA_SINIESTROS_SELECTORS.folio, 20000);
+  if (!field) {
+    throw new Error("No encontre el campo Numero de Folio de AXA.");
+  }
+
+  await field.locator.scrollIntoViewIfNeeded().catch(() => {});
+  await field.locator.click({ timeout: 2000 });
+  await field.locator.fill("");
+  await field.locator.type(folio, { delay: 35 });
+  await field.locator.evaluate((node) => {
+    node.dispatchEvent(new Event("input", { bubbles: true }));
+    node.dispatchEvent(new Event("change", { bubbles: true }));
+  }).catch(() => {});
+
+  // AXA habilita el boton hasta que el input pierde foco.
+  await field.locator.press("Tab").catch(async () => {
+    await field.locator.evaluate((node) => {
+      node.blur();
+      node.dispatchEvent(new FocusEvent("blur", { bubbles: true }));
+    }).catch(() => {});
+  });
+  await page.waitForTimeout(900);
+}
+
+function normalizeExtractedLabel(value) {
+  return normalizeLoose(value).replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+async function extractAxaSiniestroInfo(page, fallbackFolio = "") {
+  return page.evaluate(({ fallbackFolio }) => {
+    const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+    const rawText = String(document.body?.innerText || "");
+    const body = clean(rawText);
+    const lines = rawText.split(/\n|\r/).map(clean).filter(Boolean);
+    const result = {
+      siniestro: "",
+      fechaSiniestro: "",
+      estadoPago: "",
+      tipoTramite: "",
+      folio: fallbackFolio,
+      fechaSolicitud: "",
+      compromisoRespuesta: "",
+      etapaActual: "",
+      etapas: [],
+      rawText: body.slice(0, 2000),
+    };
+
+    const siniestroMatch = body.match(/Siniestro:\s*([A-Za-z0-9-]+)/i);
+    if (siniestroMatch) result.siniestro = siniestroMatch[1];
+    const fechaSinMatch = body.match(/Fecha del siniestro:\s*([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i);
+    if (fechaSinMatch) result.fechaSiniestro = fechaSinMatch[1];
+    const folioMatch = body.match(/Folio:\s*([A-Za-z0-9-]+)/i);
+    if (folioMatch) result.folio = folioMatch[1];
+
+    const statusCandidates = ["PAGADO", "INFORMACION ADICIONAL", "RECHAZADO", "EN PROCESO", "PENDIENTE"];
+    result.estadoPago = statusCandidates.find((item) => body.toUpperCase().includes(item)) || "";
+    result.tipoTramite = ["REEMBOLSO", "PROGRAMACION", "PAGO DIRECTO"].find((item) => body.toUpperCase().includes(item)) || "";
+
+    const valueAfter = (label) => {
+      const index = lines.findIndex((line) => line.toLowerCase().includes(label.toLowerCase()));
+      if (index === -1) return "";
+      const sameLine = lines[index].replace(new RegExp(label, "i"), "").trim();
+      if (sameLine) return sameLine;
+      return lines[index + 1] || "";
+    };
+    result.fechaSolicitud = valueAfter("Fecha de solicitud");
+    result.compromisoRespuesta = valueAfter("Compromiso de respuesta");
+
+    const knownStages = ["Registro", "Captura", "Dictamen", "Respuesta"];
+    result.etapas = knownStages.filter((stage) => body.includes(stage));
+    result.etapaActual = result.etapas[result.etapas.length - 1] || "";
+    return result;
+  }, { fallbackFolio }).catch(() => ({
+    siniestro: "",
+    fechaSiniestro: "",
+    estadoPago: "",
+    tipoTramite: "",
+    folio: fallbackFolio,
+    fechaSolicitud: "",
+    compromisoRespuesta: "",
+    etapaActual: "",
+    etapas: [],
+    rawText: "",
+  }));
+}
+
+async function screenshotAxaSiniestroResult(page, folio) {
+  const cleanFolio = normalizeText(folio).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 60) || "axa";
+  const file = path.join(CONFIG.screenshotsDir, `${Date.now()}-axa-siniestro-${cleanFolio}.png`);
+  await page.screenshot({ path: file, fullPage: true });
+  cleanupOldScreenshots();
+  return path.basename(file);
+}
+
+async function searchAxaSiniestroFolio(page, folio) {
+  page = await gotoAxaSiniestros(page);
+  assertNotCancelled();
+
+  await fillAxaSiniestroFolio(page, folio);
+  const button = await waitForAxaConsultButton(page);
+  const beforeUrl = page.url();
+  await Promise.all([
+    page.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {}),
+    clickLocator(button),
+  ]);
+  await page.waitForTimeout(1200);
+
+  const validation = await readAxaSiniestrosValidation(page);
+  const bodyText = normalizeText(await page.locator("body").innerText({ timeout: 2500 }).catch(() => "")).slice(0, 500);
+  const currentUrl = page.url();
+  const changedUrl = currentUrl !== beforeUrl;
+  const hasResult = /consulta de siniestros|siniestro:|fecha del siniestro|compromiso de respuesta/i.test(bodyText);
+  const hasConsulted = changedUrl || /consulta|siniestro|folio|reclamaci/i.test(bodyText);
+  const details = hasResult ? await extractAxaSiniestroInfo(page, folio) : null;
+  const screenshotId = hasResult ? await screenshotAxaSiniestroResult(page, folio).catch(() => "") : "";
+
+  return {
+    page,
+    outcome: {
+      status: validation ? "validation" : hasResult ? "result" : "consulted",
+      ok: !validation && (hasResult || hasConsulted),
+      message: validation || (hasResult ? "Resultado AXA extraido." : "Consulta AXA ejecutada."),
+      url: sanitizeUrlForClient(currentUrl),
+      details,
+      screenshotId,
+    },
+  };
+}
+
+async function runAxaSiniestros(folios, source = "manual") {
+  if (runtime.busy) {
+    return false;
+  }
+
+  const queue = [...new Set((Array.isArray(folios) ? folios : [])
+    .map((folio) => normalizeText(folio))
+    .filter(Boolean))].slice(0, 100);
+  if (!queue.length) {
+    throw new Error("Captura al menos un folio AXA para consultar.");
+  }
+
+  runtime.busy = true;
+  runtime.error = null;
+  runtime.cancelRequested = false;
+  runtime.activeRun = { id: Date.now(), trigger: `axa_siniestros_${source}`, startedAt: nowIso() };
+  runtime.axaSiniestros = {
+    busy: true,
+    source,
+    startedAt: nowIso(),
+    endedAt: null,
+    total: queue.length,
+    completed: 0,
+    current: null,
+    results: [],
+    error: null,
+    url: CONFIG.axaSiniestrosUrl,
+  };
+  setState("siniestros", "Preparando consulta de Siniestros AXA...");
+  pushLog("axa_siniestros", `Inicio de consulta AXA de ${queue.length} folio(s) (${source}).`);
+
+  let preservedPage = null;
+  let axaPage = null;
+  try {
+    const context = await getAxaSiniestrosContext();
+    preservedPage = runtime.page && !runtime.page.isClosed() ? runtime.page : null;
+    axaPage = activeAxaSiniestrosPage && !activeAxaSiniestrosPage.isClosed()
+      ? activeAxaSiniestrosPage
+      : await context.newPage();
+    activeAxaSiniestrosPage = axaPage;
+    runtime.page = axaPage;
+
+    for (const folio of queue) {
+      assertNotCancelled();
+      runtime.axaSiniestros.current = folio;
+      setState("siniestros", `Consultando folio AXA ${folio}...`);
+      try {
+        const searched = await searchAxaSiniestroFolio(axaPage, folio);
+        axaPage = searched.page;
+        runtime.axaSiniestros.results.unshift({
+          folio,
+          ...searched.outcome,
+          at: nowIso(),
+        });
+        pushLog("axa_siniestros", searched.outcome.ok ? "Consulta AXA ejecutada." : "Consulta AXA con validacion.", {
+          folio,
+          status: searched.outcome.status,
+          message: searched.outcome.message,
+        });
+      } catch (error) {
+        const detail = serializeError(error);
+        runtime.axaSiniestros.results.unshift({ folio, ok: false, status: "error", message: detail, at: nowIso() });
+        pushLog("axa_siniestros", "Fallo la consulta AXA.", { folio, error: detail });
+      } finally {
+        runtime.axaSiniestros.completed += 1;
+      }
+    }
+
+    const failed = runtime.axaSiniestros.results.filter((result) => !result.ok).length;
+    setState("done", failed ? `Siniestros AXA finalizo con ${failed} error(es).` : "Consulta de Siniestros AXA completada.");
+    return true;
+  } catch (error) {
+    const detail = serializeError(error);
+    runtime.axaSiniestros.error = detail;
+    runtime.error = detail;
+    setState("error", detail);
+    pushLog("error", detail);
+    return false;
+  } finally {
+    if (activeMonitorPage && !activeMonitorPage.isClosed()) {
+      runtime.page = activeMonitorPage;
+    } else if (preservedPage && !preservedPage.isClosed()) {
+      runtime.page = preservedPage;
+    }
+    runtime.axaSiniestros.busy = false;
+    runtime.axaSiniestros.current = null;
+    runtime.axaSiniestros.endedAt = nowIso();
+    runtime.busy = false;
+    runtime.cancelRequested = false;
+    runtime.activeRun = null;
+  }
+}
+
+async function runSiniestros(folios, source = "manual") {
+  if (runtime.busy) {
+    return false;
+  }
+
+  const queue = [...new Set((Array.isArray(folios) ? folios : [])
+    .map((folio) => normalizeText(folio))
+    .filter(Boolean))].slice(0, 500);
+  if (!queue.length) {
+    throw new Error("Captura al menos un folio para consultar.");
+  }
+
+  runtime.busy = true;
+  runtime.error = null;
+  runtime.cancelRequested = false;
+  runtime.activeRun = { id: Date.now(), trigger: `siniestros_${source}`, startedAt: nowIso() };
+  runtime.siniestros = {
+    busy: true,
+    source,
+    startedAt: nowIso(),
+    endedAt: null,
+    total: queue.length,
+    completed: 0,
+    current: null,
+    results: [],
+    error: null,
+  };
+  resetManualLoginState();
+  setState("siniestros", "Preparando consulta de Siniestros...");
+  pushLog("siniestros", `Inicio de consulta de ${queue.length} folio(s) (${source}).`);
+
+  let preservedPage = null;
+  let siniestrosPage = null;
+  try {
+    const context = await getSiniestrosContext();
+    preservedPage = runtime.page && !runtime.page.isClosed() ? runtime.page : null;
+    if (activeSiniestrosPage && !activeSiniestrosPage.isClosed()) {
+      siniestrosPage = activeSiniestrosPage;
+    } else {
+      siniestrosPage = await context.newPage();
+      activeSiniestrosPage = siniestrosPage;
+      await preparePageForUse(siniestrosPage);
+    }
+    runtime.page = siniestrosPage;
+    let page = await ensureLoggedIn(siniestrosPage, CONFIG.siniestrosUrl);
+
+    for (const folio of queue) {
+      assertNotCancelled();
+      runtime.siniestros.current = folio;
+      setState("siniestros", `Consultando folio ${folio}...`);
+      try {
+        const searched = await searchSiniestroFolio(page, folio);
+        page = searched.page;
+        const outcome = searched.outcome;
+        runtime.siniestros.results.unshift({
+          folio,
+          ...outcome,
+          at: nowIso(),
+        });
+        pushLog("siniestros", outcome.ok ? "PDF encontrado." : "Respuesta sin PDF.", {
+          folio,
+          status: outcome.status,
+          message: outcome.message,
+        });
+      } catch (error) {
+        const detail = serializeError(error);
+        runtime.siniestros.results.unshift({ folio, ok: false, message: detail, at: nowIso() });
+        pushLog("siniestros", "Fallo la busqueda de folio.", { folio, error: detail });
+        if (/sesi[o\u00f3]n|login|captcha/i.test(detail) || runtime.cancelRequested) {
+          throw error;
+        }
+      } finally {
+        runtime.siniestros.completed += 1;
+      }
+    }
+
+    const failed = runtime.siniestros.results.filter((result) => !result.ok).length;
+    setState(
+      "done",
+      failed
+        ? `Siniestros finalizado con ${failed} folio(s) no procesado(s).`
+        : "Consulta de Siniestros completada."
+    );
+    return true;
+  } catch (error) {
+    const detail = serializeError(error);
+    runtime.siniestros.error = detail;
+    runtime.error = detail;
+    const requiresManualLogin =
+      !runtime.cancelRequested &&
+      (runtime.manualLogin.required || /sesi[o\u00f3]n|captcha|login/i.test(detail));
+    if (requiresManualLogin) {
+      markManualLoginRequired(runtime.manualLogin, "Sesion vencida o requiere login manual.");
+    } else {
+      setState("error", detail);
+    }
+    pushLog("error", detail);
+    return false;
+  } finally {
+    if (runtime.manualLogin.required && siniestrosPage && !siniestrosPage.isClosed()) {
+      runtime.page = siniestrosPage;
+    } else if (activeMonitorPage && !activeMonitorPage.isClosed()) {
+      runtime.page = activeMonitorPage;
+    } else if (preservedPage && !preservedPage.isClosed()) {
+      runtime.page = preservedPage;
+    } else if (runtime.browserContext) {
+      runtime.page = activeMonitorPage && !activeMonitorPage.isClosed()
+        ? activeMonitorPage
+        : runtime.browserContext.pages().find((page) => !page.isClosed()) || null;
+    }
+    runtime.siniestros.busy = false;
+    runtime.siniestros.current = null;
+    runtime.siniestros.endedAt = nowIso();
+    runtime.busy = false;
+    runtime.cancelRequested = false;
+    runtime.activeRun = null;
+    if (!runtime.manualLogin.required) {
+      resetManualLoginState();
+    }
+  }
+}
+
 async function runMonitor(trigger = "manual") {
   if (runtime.busy) {
     return false;
@@ -5276,6 +7139,7 @@ async function runMonitor(trigger = "manual") {
     const diff = compareRows(previousRows, currentRows);
 
     persistRunData(result, currentRows, diff);
+    await notifyOpenWaStatusChanges(diff);
 
     runtime.data = currentRows;
     runtime.diff = diff;
@@ -5297,6 +7161,7 @@ async function runMonitor(trigger = "manual") {
       eliminados: diff.summary.eliminados,
     });
     runtime.lastSuccessfulRunAt = nowIso();
+    createDatabaseBackup();
 
     return true;
   } catch (error) {
@@ -5369,7 +7234,55 @@ app.get("/", (_req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-function buildStatusPayload(includeData) {
+function saveAxaSnapshot(inputRows, source = "manual") {
+  const previousRows = readJsonSafe(CONFIG.axaCurrentFile, readJsonSafe(CONFIG.axaPreviousFile, []));
+  const currentRows = normalizeMonitorRows(inputRows, mapAxaItem);
+  const diff = compareRows(previousRows, currentRows);
+  writeJson(CONFIG.axaPreviousFile, previousRows);
+  writeJson(CONFIG.axaCurrentFile, currentRows);
+  writeJson(CONFIG.axaDiffFile, diff);
+  writeJson(CONFIG.axaRawFile, inputRows);
+  writeJson(CONFIG.axaDebugFile, {
+    source,
+    savedAt: nowIso(),
+    count: currentRows.length,
+    pendingFlow: true,
+  });
+  runtime.axa = {
+    ...runtime.axa,
+    busy: false,
+    configured: false,
+    mode: "loaded",
+    message: "Datos AXA cargados. Flujo automatico pendiente.",
+    error: null,
+    lastUpdate: diff.timestamp,
+    dataVersion: diff.timestamp,
+    data: currentRows,
+    diff,
+    source,
+  };
+  return { currentRows, diff };
+}
+
+function buildAxaStatusPayload(includeData = true) {
+  const data = Array.isArray(runtime.axa.data) ? runtime.axa.data : [];
+  const diff = runtime.axa.diff || createEmptyDiff(data.length);
+  return {
+    busy: Boolean(runtime.axa.busy),
+    configured: Boolean(runtime.axa.configured),
+    mode: runtime.axa.mode || "pending_config",
+    message: runtime.axa.message || "Listo para conectar flujo AXA.",
+    error: runtime.axa.error || null,
+    lastUpdate: runtime.axa.lastUpdate || null,
+    dataVersion: runtime.axa.dataVersion || "initial",
+    summary: diff.summary || createEmptyDiff(data.length).summary,
+    data: includeData ? data : null,
+    diff: includeData ? diff : null,
+    source: runtime.axa.source || "pending_flow",
+  };
+}
+
+function buildStatusPayload(includeData, user = null) {
   const visibleData = filterArchivedMonitorRows(runtime.data);
   const visibleDiff = runtime.diff
     ? {
@@ -5395,7 +7308,8 @@ function buildStatusPayload(includeData) {
       ? visibleDiff.summary
       : createEmptyDiff(visibleData.length).summary;
   const dateRange = getDefaultDateRange();
-  const bitacora = buildBitacoraComparison(readBitacora(), visibleData);
+  const bitacoraItems = readBitacora({ user });
+  const bitacora = buildBitacoraComparison(bitacoraItems, visibleData);
 
   return {
     busy: runtime.busy,
@@ -5414,8 +7328,12 @@ function buildStatusPayload(includeData) {
     manualLogin: runtime.manualLogin,
     activeRun: runtime.activeRun,
     scheduler: publicSchedulerInfo(runtime.scheduler),
+    siniestros: runtime.siniestros,
+    axa: buildAxaStatusPayload(includeData),
+    axaSiniestros: runtime.axaSiniestros,
     auth: {
       postTokenRequired: Boolean(CONFIG.monitorToken),
+      user: publicUser(user),
     },
     query: {
       dateFrom: dateRange.displayStart,
@@ -5438,9 +7356,7 @@ function buildStatusPayload(includeData) {
   };
 }
 
-function buildBrowserPayload() {
-  const context = runtime.browserContext;
-  const page = runtime.page;
+function buildBrowserContextPayload(context, page) {
   const pageOpen = Boolean(page && !page.isClosed());
   const pages = context ? context.pages().filter((item) => !item.isClosed()) : [];
 
@@ -5449,6 +7365,18 @@ function buildBrowserPayload() {
     pageOpen,
     pages: pages.length,
     currentUrl: pageOpen ? sanitizeUrlForClient(page.url()) : null,
+  };
+}
+
+function buildBrowserPayload() {
+  const monitor = buildBrowserContextPayload(runtime.browserContext, activeMonitorPage || runtime.page);
+  const siniestros = buildBrowserContextPayload(siniestrosBrowserContext, activeSiniestrosPage);
+  return {
+    ...monitor,
+    monitor,
+    siniestros,
+    activeContext: runtime.page === activeSiniestrosPage ? "siniestros" : "monitor",
+    currentUrl: runtime.page && !runtime.page.isClosed() ? sanitizeUrlForClient(runtime.page.url()) : monitor.currentUrl,
   };
 }
 
@@ -5474,11 +7402,526 @@ function buildHealthPayload() {
   };
 }
 
+function readActiveUsers() {
+  return initDatabase()
+    .prepare(`
+      SELECT id, username, display_name, role, active, created_at, updated_at
+      FROM users
+      WHERE active = 1
+        AND role IN ('admin', 'executive')
+      ORDER BY role, display_name
+    `)
+    .all();
+}
+
+function canAccessBitacoraEntry(user, entry) {
+  if (!user || user.role === "admin") {
+    return true;
+  }
+  const names = new Set([
+    normalizeLoose(user.id),
+    normalizeLoose(user.username),
+    normalizeLoose(user.display_name),
+  ].filter(Boolean));
+  return names.has(normalizeLoose(entry.assignedUserId)) || names.has(normalizeLoose(entry.responsable));
+}
+
+function getEntryDateValue(entry, dateField = "delivery") {
+  if (dateField === "created") {
+    return parseGnpDate(entry.createdAt || entry.fechaEntradaCorreo);
+  }
+  if (dateField === "entry") {
+    return parseGnpDate(entry.fechaEntradaCorreo || entry.createdAt);
+  }
+  return parseGnpDate(entry.fechaEntrega || entry.createdAt || entry.fechaEntradaCorreo);
+}
+
+function getEntryRisk(entry, updates = 0) {
+  if (entry.archivedAt) return "archived";
+  if (isClosedStatus(entry.estado)) return "closed";
+  const dueDays = dayDiffFromToday(entry.fechaEntrega);
+  if (dueDays !== null && dueDays < 0) return "overdue";
+  if (updates <= 1) return "no_followup";
+  return "open";
+}
+
+function parseAdminMetricsFilters(query = {}) {
+  const dateFrom = parseGnpDate(query.dateFrom);
+  const dateTo = parseGnpDate(query.dateTo);
+  const dateToEnd = dateTo ? new Date(dateTo.getFullYear(), dateTo.getMonth(), dateTo.getDate(), 23, 59, 59, 999) : null;
+  return {
+    userId: normalizeText(query.userId || ""),
+    status: normalizeText(query.status || ""),
+    risk: normalizeText(query.risk || ""),
+    dateField: ["created", "entry", "delivery"].includes(query.dateField) ? query.dateField : "delivery",
+    dateFrom,
+    dateTo: dateToEnd,
+  };
+}
+
+function entryMatchesAdminFilters(entry, filters, updates = 0) {
+  if (filters.status && normalizeLoose(entry.estado) !== normalizeLoose(filters.status)) {
+    return false;
+  }
+  if (filters.risk && getEntryRisk(entry, updates) !== filters.risk) {
+    return false;
+  }
+  if (filters.dateFrom || filters.dateTo) {
+    const date = getEntryDateValue(entry, filters.dateField);
+    if (!date) return false;
+    if (filters.dateFrom && date < filters.dateFrom) return false;
+    if (filters.dateTo && date > filters.dateTo) return false;
+  }
+  return true;
+}
+
+function publicAdminCase(entry, row, updates = 0, latestHistory = null) {
+  const dueDays = dayDiffFromToday(entry.fechaEntrega);
+  const latestAfter = latestHistory?.after || null;
+  const lastComment = normalizeText(latestAfter?.comentarios || entry.comentarios || "");
+  return {
+    id: entry.id,
+    executive: row.user?.displayName || "",
+    executiveId: row.user?.id || "",
+    folio: entry.folio,
+    poliza: entry.poliza,
+    cliente: entry.cliente,
+    tramite: entry.tramite,
+    estado: entry.estado,
+    responsable: entry.responsable,
+    aseguradora: entry.aseguradora,
+    fechaEntradaCorreo: entry.fechaEntradaCorreo,
+    fechaEntrega: entry.fechaEntrega,
+    fechaSalida: entry.fechaSalida,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+    archivedAt: entry.archivedAt,
+    lastComment,
+    lastFollowupAt: latestHistory?.changedAt || entry.updatedAt || entry.createdAt,
+    lastFollowupReason: latestHistory?.reason || "",
+    lastFollowupAction: latestHistory?.action || "",
+    updates,
+    dueDays,
+    risk: getEntryRisk(entry, updates),
+  };
+}
+
+function buildExecutiveMetrics(targetUser = null, filters = {}) {
+  const database = initDatabase();
+  const users = targetUser ? [targetUser] : readActiveUsers();
+  const entries = readBitacora({ includeArchived: true });
+  const historyCounts = database
+    .prepare("SELECT entry_id, COUNT(*) AS total FROM bitacora_history GROUP BY entry_id")
+    .all()
+    .reduce((map, row) => {
+      map.set(row.entry_id, row.total);
+      return map;
+    }, new Map());
+  const latestHistory = database
+    .prepare(`
+      SELECT *
+      FROM bitacora_history
+      ORDER BY changed_at DESC, version DESC, id DESC
+    `)
+    .all()
+    .reduce((map, row) => {
+      if (!map.has(row.entry_id)) {
+        map.set(row.entry_id, {
+          id: row.id,
+          entryId: row.entry_id,
+          version: Number(row.version || 1),
+          action: row.action,
+          changedAt: row.changed_at,
+          changedBy: row.changed_by || "",
+          reason: row.reason || "",
+          after: row.after_json ? JSON.parse(row.after_json) : null,
+        });
+      }
+      return map;
+    }, new Map());
+
+  const buckets = new Map();
+  for (const user of users) {
+    buckets.set(user.id, {
+      user: publicUser(user),
+      total: 0,
+      active: 0,
+      archived: 0,
+      completed: 0,
+      overdue: 0,
+      withoutFollowup: 0,
+      updates: 0,
+      age0To3: 0,
+      age4To7: 0,
+      age8Plus: 0,
+      avgResolutionDays: 0,
+      effectivenessRate: 0,
+      cases: [],
+    });
+  }
+
+  const unassigned = targetUser
+    ? null
+    : {
+        user: { id: "unassigned", username: "sin_asignar", displayName: "Sin asignar", role: "" },
+        total: 0,
+        active: 0,
+        archived: 0,
+        completed: 0,
+        overdue: 0,
+        withoutFollowup: 0,
+        updates: 0,
+        age0To3: 0,
+        age4To7: 0,
+        age8Plus: 0,
+        avgResolutionDays: 0,
+        effectivenessRate: 0,
+        cases: [],
+      };
+
+  const findBucket = (entry) => {
+    if (entry.assignedUserId && buckets.has(entry.assignedUserId)) {
+      return buckets.get(entry.assignedUserId);
+    }
+    for (const user of users) {
+      const names = [user.display_name, user.username].map(normalizeLoose);
+      if (names.includes(normalizeLoose(entry.responsable))) {
+        return buckets.get(user.id);
+      }
+    }
+    return unassigned;
+  };
+
+  for (const entry of entries) {
+    const bucket = findBucket(entry);
+    if (!bucket) continue;
+    const updates = historyCounts.get(entry.id) || 0;
+    if (filters.userId && bucket.user?.id !== filters.userId) continue;
+    if (!entryMatchesAdminFilters(entry, filters, updates)) continue;
+
+    bucket.total += 1;
+    if (entry.archivedAt) bucket.archived += 1;
+    else bucket.active += 1;
+    if (isClosedStatus(entry.estado)) bucket.completed += 1;
+    if (!entry.archivedAt && !isClosedStatus(entry.estado) && dayDiffFromToday(entry.fechaEntrega) < 0) bucket.overdue += 1;
+    if (updates <= 1) bucket.withoutFollowup += 1;
+    bucket.updates += updates;
+
+    if (!entry.archivedAt && !isClosedStatus(entry.estado)) {
+      const ageDays = dayDiffFromToday(entry.fechaEntradaCorreo || entry.createdAt);
+      const openAge = ageDays === null ? null : Math.max(Math.abs(ageDays), 0);
+      if (openAge !== null && openAge <= 3) bucket.age0To3 += 1;
+      else if (openAge !== null && openAge <= 7) bucket.age4To7 += 1;
+      else bucket.age8Plus += 1;
+    }
+
+    bucket.cases.push(publicAdminCase(entry, bucket, updates, latestHistory.get(entry.id)));
+  }
+
+  const rows = [...buckets.values()];
+  if (unassigned && unassigned.total) {
+    rows.push(unassigned);
+  }
+  return rows.map((row) => {
+    const resolvedDurations = row.cases
+      .filter((item) => isClosedStatus(item.estado))
+      .map((item) => {
+        const start = parseGnpDate(item.fechaEntradaCorreo || item.createdAt);
+        const end = parseGnpDate(item.fechaSalida || item.updatedAt || item.fechaEntrega);
+        if (!start || !end) return null;
+        return Math.max(Math.round((startOfDay(end).getTime() - startOfDay(start).getTime()) / 86400000), 0);
+      })
+      .filter((item) => item !== null);
+    const avgResolutionDays = resolvedDurations.length
+      ? Math.round((resolvedDurations.reduce((sum, item) => sum + item, 0) / resolvedDurations.length) * 10) / 10
+      : 0;
+    return {
+      ...row,
+      avgResolutionDays,
+      effectivenessRate: row.total ? Math.round((row.completed / row.total) * 1000) / 10 : 0,
+    };
+  });
+}
+
+app.post("/api/auth/login", (req, res) => {
+  const username = normalizeText(req.body?.username);
+  const password = String(req.body?.password || "");
+  const user = readUserByUsername(username);
+  if (!user || !verifyPassword(password, user.password_hash)) {
+    res.status(401).json({ ok: false, message: "Usuario o contrasena invalida." });
+    return;
+  }
+  const token = createAuthSession(user);
+  req.user = user;
+  res.cookie("gnp_session", token, sessionCookieOptions());
+  writeAuditLog(req, "login", "auth", user.id);
+  res.json({ ok: true, user: publicUser(user) });
+});
+
+app.post("/api/auth/logout", requireMonitorToken, (req, res) => {
+  const cookies = parseCookies(req.get("cookie"));
+  const token = cookies.gnp_session || "";
+  if (token) {
+    initDatabase().prepare("DELETE FROM auth_sessions WHERE token_hash = ?").run(hashSessionToken(token));
+  }
+  writeAuditLog(req, "logout", "auth", getRequestUser(req)?.id || "");
+  res.clearCookie("gnp_session", sessionCookieOptions());
+  res.json({ ok: true });
+});
+
+app.get("/api/auth/me", requireMonitorToken, (req, res) => {
+  res.json({ ok: true, user: publicUser(getRequestUser(req)) });
+});
+
+app.get("/api/users", requireMonitorToken, requireRole("admin"), (_req, res) => {
+  res.json({ ok: true, users: readAdminUsers().map(publicUser) });
+});
+
+app.post("/api/users", requireMonitorToken, requireRole("admin"), (req, res) => {
+  const username = normalizeText(req.body?.username);
+  const displayName = normalizeText(req.body?.displayName || req.body?.display_name || username);
+  const password = String(req.body?.password || "");
+  const requestedRole = String(req.body?.role || "");
+  const role = isAllowedUserRole(requestedRole) ? requestedRole : "executive";
+  if (!username || password.length < 6) {
+    res.status(400).json({ ok: false, message: "Captura usuario y contrasena de al menos 6 caracteres." });
+    return;
+  }
+  const now = nowIso();
+  const user = {
+    id: makeUserId(),
+    username,
+    displayName,
+    role,
+  };
+  try {
+    initDatabase()
+      .prepare(`
+        INSERT INTO users (id, username, display_name, password_hash, role, active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+      `)
+      .run(user.id, username, displayName, hashPassword(password), role, now, now);
+    writeAuditLog(req, "create_user", "users", user.id, { username, role });
+    res.status(201).json({ ok: true, user });
+  } catch (error) {
+    res.status(409).json({ ok: false, message: "Ese usuario ya existe." });
+  }
+});
+
+app.put("/api/users/:id", requireMonitorToken, requireRole("admin"), (req, res) => {
+  const userId = normalizeText(req.params.id);
+  const currentUser = getRequestUser(req);
+  const existing = readAnyUserById(userId);
+  if (!existing) {
+    res.status(404).json({ ok: false, message: "Usuario no encontrado." });
+    return;
+  }
+
+  const displayName = normalizeText(req.body?.displayName || req.body?.display_name || existing.display_name);
+  const requestedRole = String(req.body?.role || existing.role);
+  const role = isAllowedUserRole(requestedRole) ? requestedRole : existing.role;
+  const password = String(req.body?.password || "");
+  const active = req.body?.active === undefined ? Boolean(existing.active) : Boolean(req.body.active);
+
+  if (currentUser?.id === userId && (role !== "admin" || !active)) {
+    res.status(400).json({ ok: false, message: "No puedes quitarte permisos de admin o desactivarte a ti mismo." });
+    return;
+  }
+  if ((existing.role === "admin" && role !== "admin") || (existing.role === "admin" && !active)) {
+    if (countActiveAdmins(userId) <= 0) {
+      res.status(400).json({ ok: false, message: "Debe quedar al menos un admin activo." });
+      return;
+    }
+  }
+  if (!displayName) {
+    res.status(400).json({ ok: false, message: "Captura nombre del usuario." });
+    return;
+  }
+  if (password && password.length < 6) {
+    res.status(400).json({ ok: false, message: "La contrasena debe tener al menos 6 caracteres." });
+    return;
+  }
+
+  const now = nowIso();
+  const database = initDatabase();
+  if (password) {
+    database
+      .prepare(`
+        UPDATE users
+        SET display_name = ?,
+            password_hash = ?,
+            role = ?,
+            active = ?,
+            updated_at = ?
+        WHERE id = ?
+      `)
+      .run(displayName, hashPassword(password), role, active ? 1 : 0, now, userId);
+  } else {
+    database
+      .prepare(`
+        UPDATE users
+        SET display_name = ?,
+            role = ?,
+            active = ?,
+            updated_at = ?
+        WHERE id = ?
+      `)
+      .run(displayName, role, active ? 1 : 0, now, userId);
+  }
+  if (!active || role !== existing.role || password) {
+    clearUserSessions(userId);
+  }
+  writeAuditLog(req, "update_user", "users", userId, { displayName, role, active });
+  res.json({ ok: true, user: publicUser(readAnyUserById(userId)), users: readAdminUsers().map(publicUser) });
+});
+
+app.post("/api/users/:id/deactivate", requireMonitorToken, requireRole("admin"), (req, res) => {
+  const userId = normalizeText(req.params.id);
+  const currentUser = getRequestUser(req);
+  const existing = readAnyUserById(userId);
+  if (!existing) {
+    res.status(404).json({ ok: false, message: "Usuario no encontrado." });
+    return;
+  }
+  if (currentUser?.id === userId) {
+    res.status(400).json({ ok: false, message: "No puedes desactivarte a ti mismo." });
+    return;
+  }
+  if (existing.role === "admin" && countActiveAdmins(userId) <= 0) {
+    res.status(400).json({ ok: false, message: "Debe quedar al menos un admin activo." });
+    return;
+  }
+  initDatabase().prepare("UPDATE users SET active = 0, updated_at = ? WHERE id = ?").run(nowIso(), userId);
+  clearUserSessions(userId);
+  writeAuditLog(req, "deactivate_user", "users", userId);
+  res.json({ ok: true, users: readAdminUsers().map(publicUser) });
+});
+
+app.post("/api/users/:id/reactivate", requireMonitorToken, requireRole("admin"), (req, res) => {
+  const userId = normalizeText(req.params.id);
+  const existing = readAnyUserById(userId);
+  if (!existing) {
+    res.status(404).json({ ok: false, message: "Usuario no encontrado." });
+    return;
+  }
+  initDatabase().prepare("UPDATE users SET active = 1, updated_at = ? WHERE id = ?").run(nowIso(), userId);
+  writeAuditLog(req, "reactivate_user", "users", userId);
+  res.json({ ok: true, users: readAdminUsers().map(publicUser) });
+});
+
+app.get("/api/admin/metrics", requireMonitorToken, requireRole("admin"), (req, res) => {
+  const filters = parseAdminMetricsFilters(req.query || {});
+  const metrics = buildExecutiveMetrics(null, filters);
+  const cases = metrics
+    .flatMap((row) => row.cases || [])
+    .sort((left, right) => {
+      const leftRisk = left.risk === "overdue" ? 0 : left.risk === "no_followup" ? 1 : 2;
+      const rightRisk = right.risk === "overdue" ? 0 : right.risk === "no_followup" ? 1 : 2;
+      if (leftRisk !== rightRisk) return leftRisk - rightRisk;
+      return parseDateForSort(left.fechaEntrega) - parseDateForSort(right.fechaEntrega);
+    });
+  res.json({
+    ok: true,
+    metrics,
+    cases,
+    users: readAdminUsers().map(publicUser),
+    filters,
+    statusOptions: ["PENDIENTE", "EN PROCESO", "TERMINADA", "RECHAZADA", "CANCELADA"],
+    riskOptions: ["overdue", "no_followup", "open", "closed", "archived"],
+  });
+});
+
+app.get("/api/my/metrics", requireMonitorToken, (req, res) => {
+  const user = getRequestUser(req);
+  res.json({ ok: true, metrics: buildExecutiveMetrics(user)[0] || null });
+});
+
 app.get("/api/status", requireMonitorToken, (req, res) => {
   const since = typeof req.query.since === "string" ? req.query.since : "";
   const forceFull = req.query.full === "1" || req.query.full === "true";
   const includeData = forceFull || !since || since !== runtime.dataVersion;
-  res.json(buildStatusPayload(includeData));
+  res.json(buildStatusPayload(includeData, getRequestUser(req)));
+});
+
+app.get("/api/axa/status", requireMonitorToken, (_req, res) => {
+  res.json({ ok: true, axa: buildAxaStatusPayload(true) });
+});
+
+app.post("/api/axa/data", requireMonitorToken, requireRole("admin"), (req, res) => {
+  const rows = Array.isArray(req.body?.rows) ? req.body.rows : extractItems(req.body || {});
+  const result = saveAxaSnapshot(rows, normalizeText(req.body?.source || "manual"));
+  writeAuditLog(req, "load_axa_data", "axa", "", { count: result.currentRows.length });
+  res.json({
+    ok: true,
+    axa: buildAxaStatusPayload(true),
+  });
+});
+
+app.post("/api/axa/run-now", requireMonitorToken, requireRole("admin", "executive"), (_req, res) => {
+  runtime.axa = {
+    ...runtime.axa,
+    mode: "pending_config",
+    message: "Pendiente de configurar el flujo AXA.",
+    error: "Pasa el flujo AXA y el origen de datos para habilitar esta accion.",
+  };
+  res.status(501).json({
+    ok: false,
+    message: "AXA aun no tiene flujo configurado. Pasa el panel/origen de datos para conectarlo.",
+    axa: buildAxaStatusPayload(true),
+  });
+});
+
+app.get("/api/axa/siniestros/config", requireMonitorToken, requireRole("admin", "executive"), (_req, res) => {
+  res.json({
+    ok: true,
+    url: CONFIG.axaSiniestrosUrl,
+    displayUrl: sanitizeUrlForClient(CONFIG.axaSiniestrosUrl),
+    configured: Boolean(CONFIG.axaSiniestrosUrl),
+  });
+});
+
+app.get("/api/axa/siniestros/status", requireMonitorToken, requireRole("admin", "executive"), (_req, res) => {
+  res.json({ ok: true, axaSiniestros: runtime.axaSiniestros });
+});
+
+app.post("/api/axa/siniestros/search", requireMonitorToken, requireRole("admin", "executive"), (req, res) => {
+  const folios = Array.isArray(req.body?.folios) ? req.body.folios : [req.body?.folio];
+  const queue = [...new Set(folios.map((folio) => normalizeText(folio)).filter(Boolean))].slice(0, 100);
+  if (!queue.length) {
+    res.status(400).json({ ok: false, message: "Captura un folio AXA para consultar." });
+    return;
+  }
+  if (runtime.busy) {
+    res.status(409).json({ ok: false, busy: true, message: "Ya hay una ejecucion en curso." });
+    return;
+  }
+
+  void runAxaSiniestros(queue, "manual");
+  res.json({ ok: true, accepted: queue.length, axaSiniestros: runtime.axaSiniestros });
+});
+
+app.post("/api/axa/siniestros/import-excel", requireMonitorToken, requireRole("admin", "executive"), (req, res) => {
+  if (!Buffer.isBuffer(req.body) || !req.body.length) {
+    res.status(400).json({ ok: false, message: "Archivo Excel vacio o no recibido." });
+    return;
+  }
+  if (runtime.busy) {
+    res.status(409).json({ ok: false, busy: true, message: "Ya hay una ejecucion en curso." });
+    return;
+  }
+
+  const folios = parseSiniestrosExcel(req.body);
+  if (!folios.length) {
+    res.status(400).json({
+      ok: false,
+      message: "No encontre folios. Usa una columna llamada Folio o coloca los folios en la primera columna.",
+    });
+    return;
+  }
+
+  const queue = folios.slice(0, 100);
+  void runAxaSiniestros(queue, "excel");
+  res.json({ ok: true, accepted: queue.length, axaSiniestros: runtime.axaSiniestros });
 });
 
 app.get("/api/health", (_req, res) => {
@@ -5582,9 +8025,10 @@ app.post("/api/session/remote-action", requireRemoteControlToken, async (req, re
 });
 
 app.get("/api/bitacora", requireMonitorToken, (_req, res) => {
+  const user = getRequestUser(_req);
   res.json({
-    ...buildBitacoraComparison(readBitacora(), filterArchivedMonitorRows(runtime.data)),
-    db: countBitacoraRecords(),
+    ...buildBitacoraComparison(readBitacoraForRequest(_req), filterArchivedMonitorRows(runtime.data)),
+    db: countBitacoraRecordsForUser(user),
   });
 });
 
@@ -5600,20 +8044,25 @@ app.get("/api/bitacora/:id/history", requireMonitorToken, (_req, res) => {
     });
     return;
   }
+  const entry = dbRowToBitacora(current);
+  if (!canAccessBitacoraEntry(getRequestUser(_req), entry)) {
+    res.status(403).json({ ok: false, message: "No tienes acceso a esta bitacora." });
+    return;
+  }
 
   res.json({
     ok: true,
-    current: dbRowToBitacora(current),
+    current: entry,
     history: readBitacoraHistory(_req.params.id),
   });
 });
 
 app.get("/api/bitacora/excel", requireMonitorToken, (_req, res) => {
-  const file = writeBitacoraExcel(buildBitacoraComparison(readBitacora(), filterArchivedMonitorRows(runtime.data)));
+  const file = writeBitacoraExcel(buildBitacoraComparison(readBitacoraForRequest(_req), filterArchivedMonitorRows(runtime.data)));
   res.download(file, "bitacora-seguimiento.xls");
 });
 
-app.post("/api/bitacora/import-excel", requireMonitorToken, (req, res) => {
+app.post("/api/bitacora/import-excel", requireMonitorToken, requireRole("admin"), (req, res) => {
   if (!Buffer.isBuffer(req.body) || !req.body.length) {
     res.status(400).json({ ok: false, message: "Archivo Excel vacio o no recibido." });
     return;
@@ -5629,16 +8078,91 @@ app.post("/api/bitacora/import-excel", requireMonitorToken, (req, res) => {
   }
 
   const stats = importBitacoraEntries(entries, buildAuditMetaFromRequest(req, "Importacion desde Excel"));
-  const comparison = buildBitacoraComparison(readBitacora(), filterArchivedMonitorRows(runtime.data));
+  const comparison = buildBitacoraComparison(readBitacoraForRequest(req), filterArchivedMonitorRows(runtime.data));
   saveComparisonHistory(comparison);
   writeBitacoraExcel(comparison);
+  writeAuditLog(req, "import_excel", "bitacora", "", stats);
   pushLog("bitacora", "Bitacora importada desde Excel.", stats);
   res.json({ ...comparison, import: stats });
 });
 
-app.post("/api/bitacora", requireMonitorToken, (req, res) => {
+app.get("/api/siniestros/pdf/:id", requireMonitorToken, requireRole("admin", "executive"), (req, res) => {
+  const id = path.basename(String(req.params.id || ""));
+  const file = path.join(CONFIG.siniestrosPdfDir, id);
+  if (!id.toLowerCase().endsWith(".pdf") || !fs.existsSync(file)) {
+    res.status(404).json({ ok: false, message: "PDF de siniestro no encontrado." });
+    return;
+  }
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="${id}"`);
+  res.sendFile(file);
+});
+
+app.get("/api/axa/siniestros/screenshot/:id", requireMonitorToken, requireRole("admin", "executive"), (req, res) => {
+  const id = path.basename(String(req.params.id || ""));
+  const file = path.join(CONFIG.screenshotsDir, id);
+  if (!id.toLowerCase().endsWith(".png") || !id.includes("axa-siniestro") || !fs.existsSync(file)) {
+    res.status(404).json({ ok: false, message: "Captura de Siniestros AXA no encontrada." });
+    return;
+  }
+  res.setHeader("Content-Type", "image/png");
+  res.sendFile(file);
+});
+
+app.post("/api/siniestros/search", requireMonitorToken, requireRole("admin", "executive"), (req, res) => {
+  const folios = Array.isArray(req.body?.folios) ? req.body.folios : [req.body?.folio];
+  const ramo = normalizeText(req.body?.ramo || "GMM");
+  const otInterna = normalizeText(req.body?.otInterna || "");
+  
+  const queue = [...new Set(folios.map((folio) => normalizeText(folio)).filter(Boolean))].slice(0, 500);
+  if (!queue.length) {
+    res.status(400).json({ ok: false, message: "Captura un folio para consultar." });
+    return;
+  }
+  if (runtime.busy) {
+    res.status(409).json({ ok: false, busy: true, message: "Ya hay una ejecucion en curso." });
+    return;
+  }
+
+  void runSiniestros(queue, "manual", { ramo, otInterna });
+  res.json({ ok: true, accepted: queue.length });
+});
+
+app.post("/api/siniestros/import-excel", requireMonitorToken, requireRole("admin", "executive"), (req, res) => {
+  if (!Buffer.isBuffer(req.body) || !req.body.length) {
+    res.status(400).json({ ok: false, message: "Archivo Excel vacio o no recibido." });
+    return;
+  }
+  if (runtime.busy) {
+    res.status(409).json({ ok: false, busy: true, message: "Ya hay una ejecucion en curso." });
+    return;
+  }
+
+  const folios = parseSiniestrosExcel(req.body);
+  if (!folios.length) {
+    res.status(400).json({
+      ok: false,
+      message: "No encontre folios. Usa una columna llamada Folio o coloca los folios en la primera columna.",
+    });
+    return;
+  }
+
+  const queue = folios.slice(0, 500);
+  void runSiniestros(queue, "excel");
+  res.json({ ok: true, accepted: queue.length });
+});
+
+app.post("/api/bitacora", requireMonitorToken, requireRole("admin", "executive"), (req, res) => {
+  const user = getRequestUser(req);
   const entry = sanitizeBitacoraEntry(req.body || {});
-  const audit = buildAuditMeta(req.body || {}, "Captura inicial");
+  applyLoggedUserCapture(entry, user);
+  if (user?.role !== "admin") {
+    entry.assignedUserId = user.id;
+    if (!entry.responsable) {
+      entry.responsable = user.display_name || user.username;
+    }
+  }
+  const audit = buildAuditMetaFromRequest(req, "Captura inicial");
   if (!entry.folio && !entry.poliza) {
     res.status(400).json({
       ok: false,
@@ -5646,8 +8170,15 @@ app.post("/api/bitacora", requireMonitorToken, (req, res) => {
     });
     return;
   }
+  if (!entry.ramo) {
+    res.status(400).json({
+      ok: false,
+      message: "Selecciona el ramo correcto para guardar la bitacora.",
+    });
+    return;
+  }
 
-  const beforeCounts = countBitacoraRecords();
+  const beforeCounts = countBitacoraRecordsForUser(user);
   const existing = findExistingBitacoraEntry(entry);
   let savedEntry = entry;
   let action = "created";
@@ -5666,16 +8197,26 @@ app.post("/api/bitacora", requireMonitorToken, (req, res) => {
     insertBitacoraEntry(entry, "create", audit);
   }
 
-  const afterCounts = countBitacoraRecords();
-  const items = readBitacora();
+  const afterCounts = countBitacoraRecordsForUser(user);
+  const items = readBitacoraForRequest(req);
   const comparison = buildBitacoraComparison(items, filterArchivedMonitorRows(runtime.data));
   saveComparisonHistory(comparison);
   writeBitacoraExcel(comparison);
+  writeAuditLog(req, action, "bitacora", existing?.id || entry.id, {
+    folio: savedEntry.folio,
+    poliza: savedEntry.poliza,
+    ramo: savedEntry.ramo,
+    otInterna: savedEntry.otInterna,
+    capturadoPor: savedEntry.createdByName,
+  });
   pushLog("bitacora", action === "created" ? "Registro agregado a bitacora." : "Seguimiento agregado al historial de bitacora.", {
     id: existing?.id || entry.id,
     action,
     folio: savedEntry.folio,
     poliza: savedEntry.poliza,
+    ramo: savedEntry.ramo,
+    otInterna: savedEntry.otInterna,
+    capturadoPor: savedEntry.createdByName,
     responsable: savedEntry.responsable,
     beforeActive: beforeCounts.active,
     afterActive: afterCounts.active,
@@ -5689,13 +8230,16 @@ app.post("/api/bitacora", requireMonitorToken, (req, res) => {
       id: existing?.id || entry.id,
       folio: savedEntry.folio,
       poliza: savedEntry.poliza,
+      ramo: savedEntry.ramo,
+      otInterna: savedEntry.otInterna,
+      capturadoPor: savedEntry.createdByName,
       before: beforeCounts,
       after: afterCounts,
     },
   });
 });
 
-app.put("/api/bitacora/:id", requireMonitorToken, (req, res) => {
+app.put("/api/bitacora/:id", requireMonitorToken, requireRole("admin", "executive"), (req, res) => {
   const audit = requireAuditReason(req, res);
   if (!audit) return;
 
@@ -5708,54 +8252,88 @@ app.put("/api/bitacora/:id", requireMonitorToken, (req, res) => {
   }
 
   const previous = dbRowToBitacora(current);
+  if (!canAccessBitacoraEntry(getRequestUser(req), previous)) {
+    res.status(403).json({ ok: false, message: "No tienes acceso a esta bitacora." });
+    return;
+  }
   const entry = sanitizeBitacoraEntry(req.body || {}, previous);
+  if (!entry.ramo) {
+    res.status(400).json({
+      ok: false,
+      message: "Selecciona el ramo correcto para guardar la bitacora.",
+    });
+    return;
+  }
+  if (getRequestUser(req)?.role !== "admin") {
+    entry.assignedUserId = previous.assignedUserId || getRequestUser(req).id;
+  }
   updateBitacoraEntry(entry, previous, "update", audit);
-  const items = readBitacora();
+  const items = readBitacoraForRequest(req);
   const comparison = buildBitacoraComparison(items, filterArchivedMonitorRows(runtime.data));
   saveComparisonHistory(comparison);
   writeBitacoraExcel(comparison);
+  writeAuditLog(req, "update", "bitacora", entry.id, {
+    folio: entry.folio,
+    poliza: entry.poliza,
+    ramo: entry.ramo,
+    otInterna: entry.otInterna,
+  });
   pushLog("bitacora", "Registro actualizado en bitacora.", {
     id: entry.id,
     folio: entry.folio,
+    ramo: entry.ramo,
+    otInterna: entry.otInterna,
   });
   res.json(comparison);
 });
 
-app.delete("/api/bitacora/:id", requireMonitorToken, (req, res) => {
+app.delete("/api/bitacora/:id", requireMonitorToken, requireRole("admin", "executive"), (req, res) => {
   const audit = requireAuditReason(req, res);
   if (!audit) return;
 
+  const current = initDatabase().prepare("SELECT * FROM bitacora WHERE id = ?").get(req.params.id);
+  if (!current || !canAccessBitacoraEntry(getRequestUser(req), dbRowToBitacora(current))) {
+    res.status(403).json({ ok: false, message: "No tienes acceso a esta bitacora." });
+    return;
+  }
   const result = archiveBitacoraEntry(req.params.id, audit);
   if (!result.changes) {
     res.status(404).json({ ok: false, message: "Registro de bitacora no encontrado." });
     return;
   }
 
-  const comparison = buildBitacoraComparison(readBitacora(), filterArchivedMonitorRows(runtime.data));
+  const comparison = buildBitacoraComparison(readBitacoraForRequest(req), filterArchivedMonitorRows(runtime.data));
   saveComparisonHistory(comparison);
   writeBitacoraExcel(comparison);
+  writeAuditLog(req, "archive", "bitacora", req.params.id);
   pushLog("bitacora", "Registro archivado en bitacora.", { id: req.params.id });
   res.json(comparison);
 });
 
-app.post("/api/bitacora/:id/restore", requireMonitorToken, (req, res) => {
+app.post("/api/bitacora/:id/restore", requireMonitorToken, requireRole("admin", "executive"), (req, res) => {
   const audit = requireAuditReason(req, res);
   if (!audit) return;
 
+  const current = initDatabase().prepare("SELECT * FROM bitacora WHERE id = ?").get(req.params.id);
+  if (!current || !canAccessBitacoraEntry(getRequestUser(req), dbRowToBitacora(current))) {
+    res.status(403).json({ ok: false, message: "No tienes acceso a esta bitacora." });
+    return;
+  }
   const result = restoreBitacoraEntry(req.params.id, audit);
   if (!result.changes) {
     res.status(404).json({ ok: false, message: "Registro archivado no encontrado." });
     return;
   }
 
-  const comparison = buildBitacoraComparison(readBitacora(), filterArchivedMonitorRows(runtime.data));
+  const comparison = buildBitacoraComparison(readBitacoraForRequest(req), filterArchivedMonitorRows(runtime.data));
   saveComparisonHistory(comparison);
   writeBitacoraExcel(comparison);
+  writeAuditLog(req, "restore", "bitacora", req.params.id);
   pushLog("bitacora", "Registro restaurado en bitacora.", { id: req.params.id });
   res.json(comparison);
 });
 
-app.post("/api/run", requireMonitorToken, (_req, res) => {
+app.post("/api/run", requireMonitorToken, requireRole("admin", "executive"), (_req, res) => {
   if (runtime.busy) {
     res.json({ ok: false, busy: true, error: "Ya hay una ejecucion en curso." });
     return;
@@ -5765,7 +8343,7 @@ app.post("/api/run", requireMonitorToken, (_req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/api/monitor/run-now", requireMonitorToken, (_req, res) => {
+app.post("/api/monitor/run-now", requireMonitorToken, requireRole("admin", "executive"), (_req, res) => {
   if (runtime.busy) {
     res.status(409).json({ ok: false, busy: true, message: "Ya hay una ejecucion en curso." });
     return;
@@ -5775,7 +8353,7 @@ app.post("/api/monitor/run-now", requireMonitorToken, (_req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/api/session/start-login", requireMonitorToken, async (_req, res) => {
+app.post("/api/session/start-login", requireMonitorToken, requireRole("admin", "executive"), async (_req, res) => {
   const result = await startAssistedLogin().catch((error) => ({
     ok: false,
     message: serializeError(error),
@@ -5783,7 +8361,7 @@ app.post("/api/session/start-login", requireMonitorToken, async (_req, res) => {
   res.status(result.busy ? 409 : 200).json(result);
 });
 
-app.post("/api/continue-manual-login", requireMonitorToken, async (_req, res) => {
+app.post("/api/continue-manual-login", requireMonitorToken, requireRole("admin", "executive"), async (_req, res) => {
   const result = await continueAfterManualLogin().catch((error) => ({
     ok: false,
     message: serializeError(error),
@@ -5791,7 +8369,7 @@ app.post("/api/continue-manual-login", requireMonitorToken, async (_req, res) =>
   res.json(result);
 });
 
-app.post("/api/session/mark-ready", requireMonitorToken, async (_req, res) => {
+app.post("/api/session/mark-ready", requireMonitorToken, requireRole("admin", "executive"), async (_req, res) => {
   const result = await continueAfterManualLogin().catch((error) => ({
     ok: false,
     message: serializeError(error),
@@ -5799,7 +8377,7 @@ app.post("/api/session/mark-ready", requireMonitorToken, async (_req, res) => {
   res.json(result);
 });
 
-app.post("/api/cancel", requireMonitorToken, async (_req, res) => {
+app.post("/api/cancel", requireMonitorToken, requireRole("admin", "executive"), async (_req, res) => {
   const result = await cancelRun().catch((error) => ({
     ok: false,
     message: serializeError(error),
@@ -5807,7 +8385,7 @@ app.post("/api/cancel", requireMonitorToken, async (_req, res) => {
   res.json(result);
 });
 
-app.post("/api/restart-browser", requireMonitorToken, async (_req, res) => {
+app.post("/api/restart-browser", requireMonitorToken, requireRole("admin", "executive"), async (_req, res) => {
   if (runtime.busy) {
     res.status(409).json({
       ok: false,
@@ -5828,7 +8406,7 @@ app.post("/api/restart-browser", requireMonitorToken, async (_req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/api/monitor/pause", requireMonitorToken, (_req, res) => {
+app.post("/api/monitor/pause", requireMonitorToken, requireRole("admin", "executive"), (_req, res) => {
   runtime.scheduler.paused = true;
   if (runtime.scheduler.timer) {
     clearTimeout(runtime.scheduler.timer);
@@ -5839,7 +8417,7 @@ app.post("/api/monitor/pause", requireMonitorToken, (_req, res) => {
   res.json({ ok: true, scheduler: publicSchedulerInfo(runtime.scheduler) });
 });
 
-app.post("/api/monitor/resume", requireMonitorToken, (_req, res) => {
+app.post("/api/monitor/resume", requireMonitorToken, requireRole("admin", "executive"), (_req, res) => {
   runtime.scheduler.paused = false;
   scheduleNextAutoRefresh();
   pushLog("scheduler", "Monitor automatico reactivado.");
@@ -5880,9 +8458,21 @@ function startServer() {
 
   pushLog("system", "Monitor listo.");
 
-  return app.listen(CONFIG.port, CONFIG.host, () => {
+  const server = app.listen(CONFIG.port, CONFIG.host, () => {
     console.log(`Monitor disponible en http://${CONFIG.host}:${CONFIG.port}`);
   });
+  server.on("error", (error) => {
+    if (error.code === "EADDRINUSE") {
+      console.error(
+        `No se pudo iniciar: el puerto ${CONFIG.port} ya esta ocupado. ` +
+          `Deten la instancia anterior o cambia PORT en .env.`
+      );
+      process.exitCode = 1;
+      return;
+    }
+    throw error;
+  });
+  return server;
 }
 
 if (require.main === module) {
@@ -5896,14 +8486,22 @@ module.exports = {
   createEmptyDiff,
   extractItems,
   getCurrentMonthDateRange,
+  hashPassword,
+  isAllowedUserRole,
   isLocalHost,
+  isTerminada,
   mapItem,
   mergeCurrentMonthWithOpenOlderRows,
+  normalizeText,
+  parseSiniestrosExcel,
   parseDateForSort,
   publicSessionInfo,
   requireMonitorToken,
+  sanitizeBitacoraEntry,
   sanitizeUrlForClient,
   sortRows,
   startServer,
+  validateExcelBuffer,
+  verifyPassword,
   writeJson,
 };

@@ -116,6 +116,7 @@ Before using it, edit `.env` on the target PC and set at least:
 GNP_EMAIL=
 GNP_PASSWORD=
 PROFILE_DIR=
+SINIESTROS_PROFILE_DIR=
 MONITOR_TOKEN=
 ```
 
@@ -182,6 +183,8 @@ KEEP_SCREENSHOTS=100
 MAX_LOG_BYTES=1048576
 INICIO_URL=https://portalintermediarios.gnp.com.mx/home/dashboard
 CONSULTA_URL=https://portalintermediarios.gnp.com.mx/home/pagina-iframe?tipo=aplicacion&menu=Todos%20los%20ramos%20Consulta
+SINIESTROS_URL=https://portalintermediarios.gnp.com.mx/home/pagina-iframe?tipo=aplicacion&menu=Siniestros%20ED%20CP%20GN
 ```
 
 Los archivos runtime se escriben bajo `DATA_DIR` (`data/` local o `/data` en contenedores), incluyendo SQLite, JSON snapshots, logs y screenshots.
+El Monitor usa `PROFILE_DIR` y Siniestros usa `SINIESTROS_PROFILE_DIR`; si este ultimo queda vacio se crea automaticamente un perfil separado junto al perfil principal.

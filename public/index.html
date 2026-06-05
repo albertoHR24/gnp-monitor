@@ -10,6 +10,25 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
+  <section id="loginOverlay" class="login-overlay hidden">
+    <form id="loginForm" class="login-box">
+      <div class="login-title">
+        <strong>Monitor GNP</strong>
+        <span>Acceso de usuarios</span>
+      </div>
+      <label>
+        Usuario
+        <input id="loginUsername" type="text" autocomplete="username" required />
+      </label>
+      <label>
+        Contrasena
+        <input id="loginPassword" type="password" autocomplete="current-password" required />
+      </label>
+      <button class="btn-primary" type="submit">Entrar</button>
+      <p id="loginError" class="login-error hidden"></p>
+    </form>
+  </section>
+
   <!-- Header -->
   <header class="header">
     <div class="header-left">
@@ -24,8 +43,13 @@
         <span class="logo-text">Monitor GNP</span>
       </div>
 
-      <nav class="nav-tabs">
-        <button id="monitorViewBtn" class="nav-tab active" type="button">
+      <div class="access-switch" role="group" aria-label="Aseguradora">
+        <button id="gnpCarrierBtn" class="carrier-switch active" type="button">GNP</button>
+        <button id="axaCarrierBtn" class="carrier-switch" type="button">AXA</button>
+      </div>
+
+      <nav class="nav-tabs" aria-label="Modulo">
+        <button id="monitorViewBtn" class="nav-tab active" type="button" data-module="monitor">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/>
           </svg>
@@ -37,23 +61,43 @@
           </svg>
           Bitacora
         </button>
+        <button id="siniestrosViewBtn" class="nav-tab" type="button" data-module="siniestros">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/>
+          </svg>
+          Siniestros
+        </button>
+        <button id="adminViewBtn" class="nav-tab hidden" type="button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3v18h18"/><path d="M7 16v-5M12 16V8M17 16v-9"/>
+          </svg>
+          Admin
+        </button>
       </nav>
     </div>
 
-    <div class="header-center">
-      <div id="statusBadge" class="status-indicator idle">
-        <span class="status-dot"></span>
-        <span id="statusLabel">Listo</span>
-      </div>
-    </div>
-
     <div class="header-right">
-      <div class="header-meta">
-        <span class="meta-label">Ultima actualizacion</span>
-        <span id="lastUpdateChip" class="meta-value">-</span>
+      <div class="header-status-row">
+        <div id="statusBadge" class="status-indicator idle">
+          <span class="status-dot"></span>
+          <span id="statusLabel">Listo</span>
+        </div>
+        <div class="header-meta">
+          <span class="meta-label">Ultima actualizacion</span>
+          <span id="lastUpdateChip" class="meta-value">-</span>
+        </div>
       </div>
 
       <div class="header-actions">
+        <div id="userPill" class="user-pill hidden">
+          <span id="userName">-</span>
+          <button id="logoutBtn" class="logout-btn" type="button" title="Salir" aria-label="Salir">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>
+            </svg>
+            <span>Salir</span>
+          </button>
+        </div>
         <div class="mode-toggle">
           <button id="operatorModeBtn" class="mode-btn active" type="button">Operador</button>
           <button id="tvModeBtn" class="mode-btn" type="button">TV</button>
@@ -72,12 +116,14 @@
           Actualizar
         </button>
 
-        <button id="startLoginBtn" class="btn-secondary" type="button">Abrir login</button>
-        <button id="manualBtn" class="btn-secondary" type="button" disabled>Marcar sesion lista</button>
-        <button id="pauseMonitorBtn" class="btn-secondary" type="button">Pausar</button>
-        <button id="resumeMonitorBtn" class="btn-secondary" type="button" disabled>Reanudar</button>
-        <button id="cancelBtn" class="btn-secondary" type="button" disabled>Cancelar</button>
-        <button id="restartBrowserBtn" class="btn-ghost" type="button">Reiniciar</button>
+        <div class="secondary-actions">
+          <button id="startLoginBtn" class="btn-secondary" type="button">Abrir login</button>
+          <button id="manualBtn" class="btn-secondary" type="button" disabled>Marcar sesion lista</button>
+          <button id="pauseMonitorBtn" class="btn-secondary" type="button">Pausar</button>
+          <button id="resumeMonitorBtn" class="btn-secondary" type="button" disabled>Reanudar</button>
+          <button id="cancelBtn" class="btn-secondary" type="button" disabled>Cancelar</button>
+          <button id="restartBrowserBtn" class="btn-ghost" type="button">Reiniciar</button>
+        </div>
       </div>
     </div>
   </header>
@@ -358,16 +404,22 @@
           <input id="bitResponsable" type="text" placeholder="Nombre responsable" />
         </div>
         <div class="form-field">
-          <label for="bitEntrada">Fecha entrada</label>
-          <input id="bitEntrada" type="date" />
+          <label for="bitOTInterna">OT Interna / Tarea</label>
+          <input id="bitOTInterna" type="text" readonly placeholder="Generada automáticamente" />
         </div>
         <div class="form-field">
           <label for="bitEntrega">Fecha entrega</label>
           <input id="bitEntrega" type="date" />
         </div>
         <div class="form-field">
-          <label for="bitSalida">Fecha salida</label>
-          <input id="bitSalida" type="date" />
+          <label for="bitRamo">Ramo</label>
+          <select id="bitRamo" required>
+            <option value="">Selecciona un ramo</option>
+            <option value="Autos">Autos</option>
+            <option value="Daño">Daño</option>
+            <option value="GMM">GMM (Gastos Médicos)</option>
+            <option value="Vida">Vida</option>
+          </select>
         </div>
         <div class="form-field span-2">
           <label for="bitDescripcion">Descripcion</label>
@@ -433,6 +485,7 @@
               <th>Manual</th>
               <th>Monitor</th>
               <th>Responsable</th>
+              <th>Capturado por</th>
               <th>Entrega</th>
               <th>Comentarios</th>
               <th>Version</th>
@@ -442,6 +495,476 @@
           <tbody id="bitacoraTbody"></tbody>
         </table>
       </div>
+    </section>
+
+    <section id="adminPanel" class="admin-panel">
+      <div class="panel-toolbar">
+        <div class="panel-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3v18h18"/><path d="M7 16v-5M12 16V8M17 16v-9"/>
+          </svg>
+          <div>
+            <h2>Administracion</h2>
+            <p class="panel-description">Usuarios, metricas y seguimiento de casos.</p>
+          </div>
+        </div>
+      </div>
+      <div class="admin-tabs" role="tablist" aria-label="Secciones de administracion">
+        <button class="admin-tab active" type="button" role="tab" aria-selected="true" data-admin-tab="users">Usuarios</button>
+        <button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-tab="metrics">Metricas</button>
+        <button class="admin-tab" type="button" role="tab" aria-selected="false" data-admin-tab="cases">Casos</button>
+      </div>
+
+      <div id="adminUsersPane" class="admin-tab-panel active" role="tabpanel">
+        <div class="admin-section-heading">
+          <div>
+            <h3>Gestion de usuarios</h3>
+            <p class="panel-description">Alta, edicion y activacion de usuarios del monitor.</p>
+          </div>
+        </div>
+        <div class="admin-user-layout">
+          <form id="adminUserForm" class="form-grid admin-user-form">
+            <input id="adminEditUserId" type="hidden" />
+            <div class="form-field">
+              <label for="adminUsername">Usuario</label>
+              <input id="adminUsername" type="text" autocomplete="off" required />
+            </div>
+            <div class="form-field">
+              <label for="adminDisplayName">Nombre</label>
+              <input id="adminDisplayName" type="text" autocomplete="off" required />
+            </div>
+            <div class="form-field">
+              <label for="adminRole">Rol</label>
+              <select id="adminRole">
+                <option value="executive">Ejecutivo</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label for="adminPassword">Contrasena</label>
+              <input id="adminPassword" type="password" autocomplete="new-password" required />
+            </div>
+            <div class="form-actions">
+              <button id="adminCancelUserEditBtn" class="btn-ghost hidden" type="button">Cancelar</button>
+              <button id="adminUserSubmitBtn" class="btn-primary" type="submit">Crear usuario</button>
+            </div>
+          </form>
+          <aside id="adminCredentialsPanel" class="admin-credentials-panel hidden">
+            <span>Credenciales creadas</span>
+            <strong id="createdUsername">-</strong>
+            <code id="createdPassword">-</code>
+          </aside>
+        </div>
+        <div id="adminNotice" class="bitacora-notice hidden" role="status" aria-live="polite"></div>
+        <div class="admin-user-table-wrap table-wrapper">
+          <table class="data-table admin-users-table">
+            <thead>
+              <tr>
+                <th>Usuario</th>
+                <th>Nombre</th>
+                <th>Rol</th>
+                <th>Estado</th>
+                <th>Actualizado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="adminUsersTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="adminMetricsPane" class="admin-tab-panel" role="tabpanel">
+        <div class="admin-section-heading">
+          <div>
+            <h3>Resumen operativo</h3>
+            <p class="panel-description">Rendimiento consolidado por ejecutivo.</p>
+          </div>
+        </div>
+        <div id="adminMetricsGrid" class="admin-metrics-grid"></div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Ejecutivo</th>
+                <th>Rol</th>
+                <th>Total</th>
+                <th>Activas</th>
+                <th>Terminadas</th>
+                <th>Vencidas</th>
+                <th>Sin seguimiento</th>
+                <th>Actualizaciones</th>
+                <th>Resolucion prom.</th>
+                <th>Efectividad</th>
+              </tr>
+            </thead>
+            <tbody id="adminMetricsTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="adminCasesPane" class="admin-tab-panel" role="tabpanel">
+        <div class="admin-section-heading">
+          <div>
+            <h3>Casos y seguimiento</h3>
+            <p class="panel-description">Filtra casos y abre la bitacora para dar seguimiento.</p>
+          </div>
+          <button id="adminExportBtn" class="btn-primary" type="button">Exportar</button>
+        </div>
+        <div class="admin-filters">
+          <div class="form-field">
+            <label for="adminMetricUser">Ejecutivo</label>
+            <select id="adminMetricUser">
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="adminMetricStatus">Estado</label>
+            <select id="adminMetricStatus">
+              <option value="">Todos</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="adminMetricRisk">Riesgo</label>
+            <select id="adminMetricRisk">
+              <option value="">Todos</option>
+              <option value="overdue">Vencidas</option>
+              <option value="no_followup">Sin seguimiento</option>
+              <option value="open">Abiertas</option>
+              <option value="closed">Cerradas</option>
+              <option value="archived">Archivadas</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="adminMetricDateField">Fecha</label>
+            <select id="adminMetricDateField">
+              <option value="delivery">Entrega</option>
+              <option value="entry">Entrada</option>
+              <option value="created">Creacion</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="adminMetricFrom">Desde</label>
+            <input id="adminMetricFrom" type="date" />
+          </div>
+          <div class="form-field">
+            <label for="adminMetricTo">Hasta</label>
+            <input id="adminMetricTo" type="date" />
+          </div>
+          <div class="admin-filter-actions">
+            <button id="adminClearFiltersBtn" class="btn-secondary" type="button">Limpiar</button>
+          </div>
+        </div>
+        <div class="admin-detail-header">
+          <div>
+            <h3 id="adminDetailTitle">Detalle de casos</h3>
+            <p id="adminDetailSubtitle" class="panel-description">Selecciona un ejecutivo o usa los filtros.</p>
+          </div>
+          <span id="adminDetailCount" class="count-badge">0 casos</span>
+        </div>
+        <div class="table-wrapper">
+          <table class="data-table admin-detail-table">
+            <thead>
+              <tr>
+                <th>Ejecutivo</th>
+                <th>Folio</th>
+                <th>Poliza</th>
+                <th>Cliente</th>
+                <th>Estado</th>
+                <th>Entrega</th>
+                <th>Riesgo</th>
+                <th>Ultimo comentario</th>
+                <th>Ult. seguimiento</th>
+                <th>Seguimientos</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="adminCasesTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Siniestros Expediente Digital Panel -->
+    <section id="siniestrosPanel" class="siniestros-panel">
+      <div class="panel-toolbar">
+        <div class="panel-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/>
+          </svg>
+          <div>
+            <h2>Expediente Digital - Siniestros</h2>
+            <p class="panel-description">Consulta GMM por Numero de transaccion. Solo se ejecuta al solicitarla.</p>
+          </div>
+        </div>
+        <div class="panel-actions">
+          <label class="btn-secondary">
+            Cargar Excel de folios
+            <input id="sinExcelInput" type="file" accept=".xlsx,.xls" hidden />
+          </label>
+        </div>
+      </div>
+
+      <form id="siniestrosForm" class="form-grid siniestros-form">
+        <div class="form-field">
+          <label for="sinRamo">Ramo</label>
+          <select id="sinRamo" required>
+            <option value="">Selecciona un ramo</option>
+            <option value="Autos">Autos</option>
+            <option value="Daño">Daño</option>
+            <option value="GMM" selected>GMM (Gastos Médicos)</option>
+            <option value="Vida">Vida</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="sinFolio">Numero de transaccion / folio</label>
+          <input id="sinFolio" type="text" placeholder="Ingrese folio" required />
+        </div>
+        <div class="form-field readonly-field">
+          <label>OT Interna</label>
+          <input id="sinOTInterna" type="text" readonly placeholder="Generada automáticamente" />
+        </div>
+        <div class="form-field readonly-field">
+          <label>Criterio de busqueda</label>
+          <input type="text" value="Numero de transaccion" readonly />
+        </div>
+        <div class="form-actions">
+          <button id="sinSearchBtn" class="btn-primary" type="submit">Buscar folio</button>
+        </div>
+      </form>
+
+      <div id="siniestrosNotice" class="bitacora-notice hidden" role="status" aria-live="polite"></div>
+
+      <div class="summary-cards siniestros-summary">
+        <div class="summary-card"><strong id="sinTotal">0</strong><span>Solicitados</span></div>
+        <div class="summary-card info"><strong id="sinCompleted">0</strong><span>Procesados</span></div>
+        <div class="summary-card success"><strong id="sinSuccess">0</strong><span>PDF disponibles</span></div>
+        <div class="summary-card danger"><strong id="sinFailed">0</strong><span>Errores</span></div>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="data-table siniestros-table">
+          <thead>
+            <tr>
+              <th>Folio</th>
+              <th>Resultado</th>
+              <th>Detalle</th>
+              <th>Documento</th>
+              <th>Hora</th>
+            </tr>
+          </thead>
+          <tbody id="siniestrosTbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="axaSiniestrosPanel" class="axa-siniestros-panel" aria-labelledby="axaSiniestrosTitle">
+      <div class="panel-toolbar">
+        <div class="panel-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6l8-4z"/><path d="M12 8v8M8 12h8"/>
+          </svg>
+          <div>
+            <h2 id="axaSiniestrosTitle">Siniestros AXA</h2>
+            <p class="panel-description">Acceso a Consulta Express AXA para revisar siniestros fuera del flujo GNP.</p>
+          </div>
+        </div>
+        <div class="panel-actions">
+          <label class="btn-secondary">
+            Cargar Excel de folios
+            <input id="axaSinExcelInput" type="file" accept=".xlsx,.xls" hidden />
+          </label>
+          <button id="axaSinRunBtn" class="btn-primary" type="submit" form="axaSiniestrosForm">Consultar en AXA</button>
+        </div>
+      </div>
+
+      <form id="axaSiniestrosForm" class="form-grid siniestros-form">
+        <div class="form-field span-2">
+          <label for="axaSinFolios">Folios AXA</label>
+          <textarea id="axaSinFolios" rows="4" placeholder="Ej. 17181465&#10;17181466&#10;17181467" required></textarea>
+        </div>
+      </form>
+
+      <div id="axaSiniestrosNotice" class="bitacora-notice hidden" role="status" aria-live="polite"></div>
+
+      <div class="summary-cards siniestros-summary">
+        <div class="summary-card"><strong id="axaSinTotal">0</strong><span>Solicitados</span></div>
+        <div class="summary-card info"><strong id="axaSinCompleted">0</strong><span>Procesados</span></div>
+        <div class="summary-card success"><strong id="axaSinSuccess">0</strong><span>Consultados</span></div>
+        <div class="summary-card danger"><strong id="axaSinFailed">0</strong><span>Errores</span></div>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="data-table siniestros-table">
+          <thead>
+            <tr>
+              <th>Folio AXA</th>
+              <th>Resultado</th>
+              <th>Detalle</th>
+              <th>Siniestro</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+              <th>Hora</th>
+            </tr>
+          </thead>
+          <tbody id="axaSiniestrosTbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div id="axaSiniestrosModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="axaSiniestrosModalTitle">
+      <div class="modal-card axa-result-modal">
+        <div class="modal-header">
+          <div>
+            <strong id="axaSiniestrosModalTitle">Resultado AXA</strong>
+            <span id="axaSiniestrosModalSubtitle">-</span>
+          </div>
+          <button id="axaSiniestrosModalClose" class="icon-btn" type="button" aria-label="Cerrar">X</button>
+        </div>
+        <div id="axaSiniestrosModalBody" class="modal-body"></div>
+      </div>
+    </div>
+
+    <section id="axaPanel" class="axa-panel" aria-labelledby="axaPanelTitle">
+      <div class="panel-toolbar">
+        <div class="panel-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6l8-4z"/><path d="M9 13l2 2 4-5"/>
+          </svg>
+          <div>
+            <h2 id="axaPanelTitle">Monitor AXA</h2>
+            <p class="panel-description">Vista preparada para recibir el flujo AXA y su origen de datos.</p>
+          </div>
+        </div>
+        <div class="panel-actions">
+          <button id="axaRunBtn" class="btn-primary" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            Actualizar AXA
+          </button>
+          <button id="axaLoginBtn" class="btn-secondary" type="button" disabled>Abrir login AXA</button>
+        </div>
+      </div>
+
+      <section class="metrics-bar axa-metrics">
+        <div class="metric-card">
+          <span class="metric-label">Hora</span>
+          <span id="axaClock" class="metric-value">--:--</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Ultima consulta AXA</span>
+          <span id="axaLastUpdate" class="metric-value">Pendiente</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Proxima consulta</span>
+          <span id="axaNextUpdate" class="metric-value">Desactivada</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Sesion AXA</span>
+          <span id="axaSessionStatus" class="metric-value">No configurada</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">Registros AXA</span>
+          <span id="axaRecordCount" class="metric-value">0</span>
+        </div>
+      </section>
+
+      <section class="stats-grid axa-stats">
+        <div class="stat-card">
+          <div class="stat-header"><span class="stat-label">Total AXA</span></div>
+          <span id="axaTotal" class="stat-value">0</span>
+        </div>
+        <div class="stat-card accent-green">
+          <div class="stat-header"><span class="stat-label">Nuevos</span></div>
+          <span id="axaNewCount" class="stat-value">0</span>
+        </div>
+        <div class="stat-card accent-blue">
+          <div class="stat-header"><span class="stat-label">Modificados</span></div>
+          <span id="axaChangedCount" class="stat-value">0</span>
+        </div>
+        <div class="stat-card accent-red">
+          <div class="stat-header"><span class="stat-label">Vencidas</span></div>
+          <span id="axaDueCount" class="stat-value">0</span>
+        </div>
+        <div class="stat-card accent-yellow">
+          <div class="stat-header"><span class="stat-label">Vencen hoy</span></div>
+          <span id="axaTodayCount" class="stat-value">0</span>
+        </div>
+        <div class="stat-card">
+          <div class="stat-header"><span class="stat-label">Eliminados</span></div>
+          <span id="axaDeletedCount" class="stat-value">0</span>
+        </div>
+        <div class="stat-card wide">
+          <div class="stat-header"><span class="stat-label">Estado AXA</span></div>
+          <span id="axaStateMessage" class="stat-message">Vista lista</span>
+          <span id="axaStateSecondary" class="stat-secondary">Sin conexion al monitor</span>
+        </div>
+      </section>
+
+      <section class="filters-bar axa-filters">
+        <div class="filter-tabs">
+          <button class="filter-tab axa-filter-tab active" type="button" data-axa-filter="all">Todos <span id="axaQuickAllCount">0</span></button>
+          <button class="filter-tab axa-filter-tab" type="button" data-axa-filter="due">Vencidas <span id="axaQuickDueCount">0</span></button>
+          <button class="filter-tab axa-filter-tab" type="button" data-axa-filter="today">Vencen hoy <span id="axaQuickTodayCount">0</span></button>
+          <button class="filter-tab axa-filter-tab" type="button" data-axa-filter="open">Abiertas <span id="axaQuickOpenCount">0</span></button>
+          <button class="filter-tab axa-filter-tab" type="button" data-axa-filter="changed">Cambiadas <span id="axaQuickChangedCount">0</span></button>
+          <button class="filter-tab axa-filter-tab" type="button" data-axa-filter="new">Nuevas <span id="axaQuickNewCount">0</span></button>
+        </div>
+      </section>
+
+      <section class="table-panel axa-table-panel">
+        <div class="table-header">
+          <div class="table-title-group">
+            <h2>Ordenes de Trabajo AXA</h2>
+            <span id="axaTableCount" class="count-badge">0 registros</span>
+          </div>
+          <div class="table-controls">
+            <div class="search-input">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input id="axaSearchInput" type="text" placeholder="Buscar OT AXA, poliza, contratante..." />
+            </div>
+            <select id="axaStatusFilter" class="select-input">
+              <option value="">Todos los estados AXA</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="axaEmptyState" class="empty-state axa-empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 2l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6l8-4z"/><path d="M9 13l2 2 4-5"/>
+          </svg>
+          <h3>Sin registros AXA cargados</h3>
+          <p>Esta vista ya esta separada del monitor GNP y lista para conectar el flujo AXA.</p>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="col-ot">OT AXA</th>
+                <th class="col-usuario">Usuario</th>
+                <th class="col-estatus">Estatus</th>
+                <th class="col-prioridad">Prioridad</th>
+                <th class="col-fecha">Compromiso</th>
+                <th class="col-poliza">Poliza</th>
+                <th class="col-agente">Agente</th>
+                <th class="col-contratante">Contratante</th>
+                <th class="col-tipo">Tipo</th>
+                <th class="col-producto">Producto</th>
+                <th class="col-guia">Guia</th>
+                <th class="col-fecha">Registro</th>
+                <th class="col-fecha">Primer ingreso</th>
+                <th class="col-fecha">Ultimo ingreso</th>
+                <th class="col-medio">Medio</th>
+                <th class="col-rol">Rol</th>
+              </tr>
+            </thead>
+            <tbody id="axaTbody"></tbody>
+          </table>
+        </div>
+      </section>
     </section>
 
     <!-- Main Content -->

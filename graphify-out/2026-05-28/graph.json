@@ -225,7 +225,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L309",
       "id": "nueva_carpeta_5_gnp_monitor_formatcompactdate",
-      "community": 6,
+      "community": 10,
       "norm_label": "formatcompactdate()"
     },
     {
@@ -234,7 +234,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L316",
       "id": "nueva_carpeta_5_gnp_monitor_formatdisplaydate",
-      "community": 6,
+      "community": 10,
       "norm_label": "formatdisplaydate()"
     },
     {
@@ -243,7 +243,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L320",
       "id": "nueva_carpeta_5_gnp_monitor_parseconfigureddate",
-      "community": 6,
+      "community": 10,
       "norm_label": "parseconfigureddate()"
     },
     {
@@ -252,7 +252,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L353",
       "id": "nueva_carpeta_5_gnp_monitor_getdefaultdaterange",
-      "community": 6,
+      "community": 10,
       "norm_label": "getdefaultdaterange()"
     },
     {
@@ -261,7 +261,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L371",
       "id": "nueva_carpeta_5_gnp_monitor_getcurrentmonthdaterange",
-      "community": 6,
+      "community": 10,
       "norm_label": "getcurrentmonthdaterange()"
     },
     {
@@ -288,7 +288,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L401",
       "id": "nueva_carpeta_5_gnp_monitor_normalizeloose",
-      "community": 0,
+      "community": 6,
       "norm_label": "normalizeloose()"
     },
     {
@@ -306,7 +306,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L412",
       "id": "nueva_carpeta_5_gnp_monitor_parsedateforsort",
-      "community": 8,
+      "community": 10,
       "norm_label": "parsedateforsort()"
     },
     {
@@ -414,7 +414,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L732",
       "id": "nueva_carpeta_5_gnp_monitor_normalizeheader",
-      "community": 10,
+      "community": 19,
       "norm_label": "normalizeheader()"
     },
     {
@@ -423,7 +423,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L736",
       "id": "nueva_carpeta_5_gnp_monitor_excelvaluetotext",
-      "community": 10,
+      "community": 19,
       "norm_label": "excelvaluetotext()"
     },
     {
@@ -432,7 +432,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L752",
       "id": "nueva_carpeta_5_gnp_monitor_pickexcelvalue",
-      "community": 10,
+      "community": 19,
       "norm_label": "pickexcelvalue()"
     },
     {
@@ -729,7 +729,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L1637",
       "id": "nueva_carpeta_5_gnp_monitor_previewtoken",
-      "community": 19,
+      "community": 0,
       "norm_label": "previewtoken()"
     },
     {
@@ -747,7 +747,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L1652",
       "id": "nueva_carpeta_5_gnp_monitor_appendpersistentlog",
-      "community": 1,
+      "community": 0,
       "norm_label": "appendpersistentlog()"
     },
     {
@@ -774,7 +774,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L1687",
       "id": "nueva_carpeta_5_gnp_monitor_extractitems",
-      "community": 19,
+      "community": 0,
       "norm_label": "extractitems()"
     },
     {
@@ -954,7 +954,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2052",
       "id": "nueva_carpeta_5_gnp_monitor_sanitizeurlforclient",
-      "community": 26,
+      "community": 0,
       "norm_label": "sanitizeurlforclient()"
     },
     {
@@ -963,7 +963,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2066",
       "id": "nueva_carpeta_5_gnp_monitor_publicsessioninfo",
-      "community": 26,
+      "community": 8,
       "norm_label": "publicsessioninfo()"
     },
     {
@@ -1143,7 +1143,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2341",
       "id": "nueva_carpeta_5_gnp_monitor_getsearchtargets",
-      "community": 0,
+      "community": 6,
       "norm_label": "getsearchtargets()"
     },
     {
@@ -1170,7 +1170,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2376",
       "id": "nueva_carpeta_5_gnp_monitor_getworkflowtarget",
-      "community": 0,
+      "community": 6,
       "norm_label": "getworkflowtarget()"
     },
     {
@@ -1179,7 +1179,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2399",
       "id": "nueva_carpeta_5_gnp_monitor_clicklocator",
-      "community": 0,
+      "community": 6,
       "norm_label": "clicklocator()"
     },
     {
@@ -1188,7 +1188,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2439",
       "id": "nueva_carpeta_5_gnp_monitor_findvisiblelocator",
-      "community": 0,
+      "community": 6,
       "norm_label": "findvisiblelocator()"
     },
     {
@@ -1197,7 +1197,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2482",
       "id": "nueva_carpeta_5_gnp_monitor_clickfirst",
-      "community": 0,
+      "community": 6,
       "norm_label": "clickfirst()"
     },
     {
@@ -1206,7 +1206,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2490",
       "id": "nueva_carpeta_5_gnp_monitor_fillfirst",
-      "community": 0,
+      "community": 6,
       "norm_label": "fillfirst()"
     },
     {
@@ -1215,7 +1215,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2499",
       "id": "nueva_carpeta_5_gnp_monitor_filllocatorvalue",
-      "community": 0,
+      "community": 6,
       "norm_label": "filllocatorvalue()"
     },
     {
@@ -1224,7 +1224,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2531",
       "id": "nueva_carpeta_5_gnp_monitor_fillloginfieldbylabel",
-      "community": 0,
+      "community": 6,
       "norm_label": "fillloginfieldbylabel()"
     },
     {
@@ -1233,7 +1233,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2560",
       "id": "nueva_carpeta_5_gnp_monitor_isloginformvisible",
-      "community": 0,
+      "community": 6,
       "norm_label": "isloginformvisible()"
     },
     {
@@ -1242,7 +1242,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2582",
       "id": "nueva_carpeta_5_gnp_monitor_detectcaptcha",
-      "community": 0,
+      "community": 6,
       "norm_label": "detectcaptcha()"
     },
     {
@@ -1386,7 +1386,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3049",
       "id": "nueva_carpeta_5_gnp_monitor_prepareloginpage",
-      "community": 0,
+      "community": 6,
       "norm_label": "prepareloginpage()"
     },
     {
@@ -1431,7 +1431,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3250",
       "id": "nueva_carpeta_5_gnp_monitor_startassistedlogin",
-      "community": 0,
+      "community": 6,
       "norm_label": "startassistedlogin()"
     },
     {
@@ -1458,7 +1458,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3372",
       "id": "nueva_carpeta_5_gnp_monitor_openworkflowcombo",
-      "community": 0,
+      "community": 6,
       "norm_label": "openworkflowcombo()"
     },
     {
@@ -1467,7 +1467,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3470",
       "id": "nueva_carpeta_5_gnp_monitor_isworkflowselected",
-      "community": 0,
+      "community": 6,
       "norm_label": "isworkflowselected()"
     },
     {
@@ -1485,7 +1485,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3572",
       "id": "nueva_carpeta_5_gnp_monitor_clickworkflowoptionbycoordinates",
-      "community": 0,
+      "community": 6,
       "norm_label": "clickworkflowoptionbycoordinates()"
     },
     {
@@ -1494,7 +1494,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3612",
       "id": "nueva_carpeta_5_gnp_monitor_clickworkflowoptionbydom",
-      "community": 0,
+      "community": 6,
       "norm_label": "clickworkflowoptionbydom()"
     },
     {
@@ -1512,7 +1512,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3678",
       "id": "nueva_carpeta_5_gnp_monitor_findconsultarbutton",
-      "community": 0,
+      "community": 6,
       "norm_label": "findconsultarbutton()"
     },
     {
@@ -1548,7 +1548,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3867",
       "id": "nueva_carpeta_5_gnp_monitor_selectworkflowoption",
-      "community": 0,
+      "community": 6,
       "norm_label": "selectworkflowoption()"
     },
     {
@@ -1566,7 +1566,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L4107",
       "id": "nueva_carpeta_5_gnp_monitor_creategetpendientescapture",
-      "community": 1,
+      "community": 0,
       "norm_label": "creategetpendientescapture()"
     },
     {
@@ -1611,7 +1611,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L4460",
       "id": "nueva_carpeta_5_gnp_monitor_mapscrapedrow",
-      "community": 1,
+      "community": 13,
       "norm_label": "mapscrapedrow()"
     },
     {
@@ -1620,7 +1620,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L4486",
       "id": "nueva_carpeta_5_gnp_monitor_scrapetablerows",
-      "community": 0,
+      "community": 13,
       "norm_label": "scrapetablerows()"
     },
     {
@@ -1647,7 +1647,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L4619",
       "id": "nueva_carpeta_5_gnp_monitor_buildgetpendientesurl",
-      "community": 10,
+      "community": 8,
       "norm_label": "buildgetpendientesurl()"
     },
     {
@@ -1692,7 +1692,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L4841",
       "id": "nueva_carpeta_5_gnp_monitor_getconsultaapptarget",
-      "community": 0,
+      "community": 6,
       "norm_label": "getconsultaapptarget()"
     },
     {
@@ -1701,7 +1701,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L4854",
       "id": "nueva_carpeta_5_gnp_monitor_waitforconsultaapptarget",
-      "community": 0,
+      "community": 6,
       "norm_label": "waitforconsultaapptarget()"
     },
     {
@@ -1746,7 +1746,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5076",
       "id": "nueva_carpeta_5_gnp_monitor_waitforcapturedrows",
-      "community": 19,
+      "community": 0,
       "norm_label": "waitforcapturedrows()"
     },
     {
@@ -1773,7 +1773,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5350",
       "id": "nueva_carpeta_5_gnp_monitor_fillsiniestrosautocomplete",
-      "community": 0,
+      "community": 6,
       "norm_label": "fillsiniestrosautocomplete()"
     },
     {
@@ -1782,7 +1782,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5373",
       "id": "nueva_carpeta_5_gnp_monitor_savesiniestrospdf",
-      "community": 10,
+      "community": 6,
       "norm_label": "savesiniestrospdf()"
     },
     {
@@ -1791,7 +1791,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5389",
       "id": "nueva_carpeta_5_gnp_monitor_createsiniestrosoutcomecapture",
-      "community": 1,
+      "community": 6,
       "norm_label": "createsiniestrosoutcomecapture()"
     },
     {
@@ -1800,7 +1800,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5447",
       "id": "nueva_carpeta_5_gnp_monitor_readsiniestrosportalerror",
-      "community": 0,
+      "community": 6,
       "norm_label": "readsiniestrosportalerror()"
     },
     {
@@ -1809,7 +1809,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5458",
       "id": "nueva_carpeta_5_gnp_monitor_waitforsiniestrosdocumentoutcome",
-      "community": 0,
+      "community": 6,
       "norm_label": "waitforsiniestrosdocumentoutcome()"
     },
     {
@@ -1818,7 +1818,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5496",
       "id": "nueva_carpeta_5_gnp_monitor_waitforsiniestrossearchresult",
-      "community": 0,
+      "community": 6,
       "norm_label": "waitforsiniestrossearchresult()"
     },
     {
@@ -1836,7 +1836,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5555",
       "id": "nueva_carpeta_5_gnp_monitor_triggersiniestrosbuscar",
-      "community": 0,
+      "community": 6,
       "norm_label": "triggersiniestrosbuscar()"
     },
     {
@@ -1845,7 +1845,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5600",
       "id": "nueva_carpeta_5_gnp_monitor_clicksiniestrosverdocumentos",
-      "community": 0,
+      "community": 6,
       "norm_label": "clicksiniestrosverdocumentos()"
     },
     {
@@ -1854,7 +1854,7 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5613",
       "id": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio",
-      "community": 0,
+      "community": 6,
       "norm_label": "searchsiniestrofolio()"
     },
     {
@@ -1870,7 +1870,7 @@
       "label": "runMonitor()",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L5776",
+      "source_location": "L5774",
       "id": "nueva_carpeta_5_gnp_monitor_runmonitor",
       "community": 0,
       "norm_label": "runmonitor()"
@@ -1879,7 +1879,7 @@
       "label": "cancelRun()",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L5918",
+      "source_location": "L5916",
       "id": "nueva_carpeta_5_gnp_monitor_cancelrun",
       "community": 0,
       "norm_label": "cancelrun()"
@@ -1888,25 +1888,16 @@
       "label": "buildStatusPayload()",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L5945",
+      "source_location": "L5943",
       "id": "nueva_carpeta_5_gnp_monitor_buildstatuspayload",
       "community": 24,
       "norm_label": "buildstatuspayload()"
     },
     {
-      "label": "buildBrowserContextPayload()",
-      "file_type": "code",
-      "source_file": "gnp-monitor.js",
-      "source_location": "L6015",
-      "id": "nueva_carpeta_5_gnp_monitor_buildbrowsercontextpayload",
-      "community": 26,
-      "norm_label": "buildbrowsercontextpayload()"
-    },
-    {
       "label": "buildBrowserPayload()",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6027",
+      "source_location": "L6013",
       "id": "nueva_carpeta_5_gnp_monitor_buildbrowserpayload",
       "community": 26,
       "norm_label": "buildbrowserpayload()"
@@ -1915,7 +1906,7 @@
       "label": "buildHealthPayload()",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6039",
+      "source_location": "L6027",
       "id": "nueva_carpeta_5_gnp_monitor_buildhealthpayload",
       "community": 26,
       "norm_label": "buildhealthpayload()"
@@ -1924,7 +1915,7 @@
       "label": "payload",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6069",
+      "source_location": "L6057",
       "id": "nueva_carpeta_5_gnp_monitor_payload",
       "community": 1,
       "norm_label": "payload"
@@ -1933,7 +1924,7 @@
       "label": "getRemoteLoginPage()",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6095",
+      "source_location": "L6083",
       "id": "nueva_carpeta_5_gnp_monitor_getremoteloginpage",
       "community": 0,
       "norm_label": "getremoteloginpage()"
@@ -1942,7 +1933,7 @@
       "label": "action",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6124",
+      "source_location": "L6112",
       "id": "nueva_carpeta_5_gnp_monitor_action",
       "community": 1,
       "norm_label": "action"
@@ -1951,7 +1942,7 @@
       "label": "xRatio",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6127",
+      "source_location": "L6115",
       "id": "nueva_carpeta_5_gnp_monitor_xratio",
       "community": 1,
       "norm_label": "xratio"
@@ -1960,7 +1951,7 @@
       "label": "yRatio",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6128",
+      "source_location": "L6116",
       "id": "nueva_carpeta_5_gnp_monitor_yratio",
       "community": 1,
       "norm_label": "yratio"
@@ -1969,16 +1960,16 @@
       "label": "text",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6136",
+      "source_location": "L6124",
       "id": "nueva_carpeta_5_gnp_monitor_text",
-      "community": 1,
+      "community": 0,
       "norm_label": "text"
     },
     {
       "label": "key",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6143",
+      "source_location": "L6131",
       "id": "nueva_carpeta_5_gnp_monitor_key",
       "community": 1,
       "norm_label": "key"
@@ -1987,7 +1978,7 @@
       "label": "allowedKeys",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6144",
+      "source_location": "L6132",
       "id": "nueva_carpeta_5_gnp_monitor_allowedkeys",
       "community": 1,
       "norm_label": "allowedkeys"
@@ -1996,7 +1987,7 @@
       "label": "deltaY",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6151",
+      "source_location": "L6139",
       "id": "nueva_carpeta_5_gnp_monitor_deltay",
       "community": 1,
       "norm_label": "deltay"
@@ -2005,7 +1996,7 @@
       "label": "current",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6176",
+      "source_location": "L6164",
       "id": "nueva_carpeta_5_gnp_monitor_current",
       "community": 1,
       "norm_label": "current"
@@ -2014,7 +2005,7 @@
       "label": "file",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6196",
+      "source_location": "L6184",
       "id": "nueva_carpeta_5_gnp_monitor_file",
       "community": 1,
       "norm_label": "file"
@@ -2023,16 +2014,16 @@
       "label": "entries",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6206",
+      "source_location": "L6194",
       "id": "nueva_carpeta_5_gnp_monitor_entries",
-      "community": 10,
+      "community": 8,
       "norm_label": "entries"
     },
     {
       "label": "stats",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6215",
+      "source_location": "L6203",
       "id": "nueva_carpeta_5_gnp_monitor_stats",
       "community": 1,
       "norm_label": "stats"
@@ -2041,7 +2032,7 @@
       "label": "comparison",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6216",
+      "source_location": "L6204",
       "id": "nueva_carpeta_5_gnp_monitor_comparison",
       "community": 1,
       "norm_label": "comparison"
@@ -2050,7 +2041,7 @@
       "label": "id",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6224",
+      "source_location": "L6212",
       "id": "nueva_carpeta_5_gnp_monitor_id",
       "community": 1,
       "norm_label": "id"
@@ -2059,7 +2050,7 @@
       "label": "queue",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6237",
+      "source_location": "L6225",
       "id": "nueva_carpeta_5_gnp_monitor_queue",
       "community": 1,
       "norm_label": "queue"
@@ -2068,7 +2059,7 @@
       "label": "folios",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6261",
+      "source_location": "L6249",
       "id": "nueva_carpeta_5_gnp_monitor_folios",
       "community": 1,
       "norm_label": "folios"
@@ -2077,7 +2068,7 @@
       "label": "entry",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6276",
+      "source_location": "L6264",
       "id": "nueva_carpeta_5_gnp_monitor_entry",
       "community": 1,
       "norm_label": "entry"
@@ -2086,7 +2077,7 @@
       "label": "audit",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6277",
+      "source_location": "L6265",
       "id": "nueva_carpeta_5_gnp_monitor_audit",
       "community": 1,
       "norm_label": "audit"
@@ -2095,7 +2086,7 @@
       "label": "beforeCounts",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6286",
+      "source_location": "L6274",
       "id": "nueva_carpeta_5_gnp_monitor_beforecounts",
       "community": 1,
       "norm_label": "beforecounts"
@@ -2104,7 +2095,7 @@
       "label": "existing",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6287",
+      "source_location": "L6275",
       "id": "nueva_carpeta_5_gnp_monitor_existing",
       "community": 1,
       "norm_label": "existing"
@@ -2113,7 +2104,7 @@
       "label": "afterCounts",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6305",
+      "source_location": "L6293",
       "id": "nueva_carpeta_5_gnp_monitor_aftercounts",
       "community": 1,
       "norm_label": "aftercounts"
@@ -2122,7 +2113,7 @@
       "label": "items",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6306",
+      "source_location": "L6294",
       "id": "nueva_carpeta_5_gnp_monitor_items",
       "community": 1,
       "norm_label": "items"
@@ -2131,7 +2122,7 @@
       "label": "previous",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6346",
+      "source_location": "L6334",
       "id": "nueva_carpeta_5_gnp_monitor_previous",
       "community": 1,
       "norm_label": "previous"
@@ -2140,7 +2131,7 @@
       "label": "result",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6364",
+      "source_location": "L6352",
       "id": "nueva_carpeta_5_gnp_monitor_result",
       "community": 1,
       "norm_label": "result"
@@ -2149,7 +2140,7 @@
       "label": "scheduleNextAutoRefresh()",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6485",
+      "source_location": "L6473",
       "id": "nueva_carpeta_5_gnp_monitor_schedulenextautorefresh",
       "community": 24,
       "norm_label": "schedulenextautorefresh()"
@@ -2158,7 +2149,7 @@
       "label": "startServer()",
       "file_type": "code",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6509",
+      "source_location": "L6497",
       "id": "nueva_carpeta_5_gnp_monitor_startserver",
       "community": 24,
       "norm_label": "startserver()"
@@ -2574,7 +2565,7 @@
       "source_file": "public/app.js",
       "source_location": "L115",
       "id": "public_app_gettotalpages",
-      "community": 12,
+      "community": 7,
       "norm_label": "gettotalpages()"
     },
     {
@@ -2646,7 +2637,7 @@
       "source_file": "public/app.js",
       "source_location": "L183",
       "id": "public_app_updatetvcontrols",
-      "community": 2,
+      "community": 12,
       "norm_label": "updatetvcontrols()"
     },
     {
@@ -2664,7 +2655,7 @@
       "source_file": "public/app.js",
       "source_location": "L217",
       "id": "public_app_setuimode",
-      "community": 12,
+      "community": 7,
       "norm_label": "setuimode()"
     },
     {
@@ -2682,7 +2673,7 @@
       "source_file": "public/app.js",
       "source_location": "L255",
       "id": "public_app_setquickfilter",
-      "community": 12,
+      "community": 7,
       "norm_label": "setquickfilter()"
     },
     {
@@ -2862,7 +2853,7 @@
       "source_file": "public/app.js",
       "source_location": "L451",
       "id": "public_app_sortfortv",
-      "community": 12,
+      "community": 7,
       "norm_label": "sortfortv()"
     },
     {
@@ -2871,7 +2862,7 @@
       "source_file": "public/app.js",
       "source_location": "L467",
       "id": "public_app_getoperationalsummary",
-      "community": 12,
+      "community": 7,
       "norm_label": "getoperationalsummary()"
     },
     {
@@ -2880,7 +2871,7 @@
       "source_file": "public/app.js",
       "source_location": "L484",
       "id": "public_app_renderoperationalsummary",
-      "community": 12,
+      "community": 7,
       "norm_label": "renderoperationalsummary()"
     },
     {
@@ -2889,7 +2880,7 @@
       "source_file": "public/app.js",
       "source_location": "L501",
       "id": "public_app_applyfilters",
-      "community": 12,
+      "community": 7,
       "norm_label": "applyfilters()"
     },
     {
@@ -2898,7 +2889,7 @@
       "source_file": "public/app.js",
       "source_location": "L544",
       "id": "public_app_rendertablepage",
-      "community": 12,
+      "community": 7,
       "norm_label": "rendertablepage()"
     },
     {
@@ -2907,7 +2898,7 @@
       "source_file": "public/app.js",
       "source_location": "L628",
       "id": "public_app_updatepagination",
-      "community": 12,
+      "community": 7,
       "norm_label": "updatepagination()"
     },
     {
@@ -2916,7 +2907,7 @@
       "source_file": "public/app.js",
       "source_location": "L658",
       "id": "public_app_updatehiddenrowsbutton",
-      "community": 12,
+      "community": 7,
       "norm_label": "updatehiddenrowsbutton()"
     },
     {
@@ -2934,7 +2925,7 @@
       "source_file": "public/app.js",
       "source_location": "L697",
       "id": "public_app_resettablescroll",
-      "community": 12,
+      "community": 7,
       "norm_label": "resettablescroll()"
     },
     {
@@ -3366,7 +3357,7 @@
       "source_file": "public/app.js",
       "source_location": "L1817",
       "id": "public_app_selectrow",
-      "community": 12,
+      "community": 7,
       "norm_label": "selectrow()"
     },
     {
@@ -3375,7 +3366,7 @@
       "source_file": "public/app.js",
       "source_location": "L1823",
       "id": "public_app_closedetail",
-      "community": 12,
+      "community": 7,
       "norm_label": "closedetail()"
     },
     {
@@ -3384,7 +3375,7 @@
       "source_file": "public/app.js",
       "source_location": "L1829",
       "id": "public_app_rendertvalerts",
-      "community": 12,
+      "community": 7,
       "norm_label": "rendertvalerts()"
     },
     {
@@ -3681,7 +3672,7 @@
       "source_file": "public/app.js",
       "source_location": "L2377",
       "id": "public_app_togglefullscreen",
-      "community": 2,
+      "community": 12,
       "norm_label": "togglefullscreen()"
     },
     {
@@ -4737,9 +4728,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L11",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_data_dir"
+      "target": "nueva_carpeta_5_gnp_monitor_data_dir",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -4817,9 +4808,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L226",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_siniestros_selectors"
+      "target": "nueva_carpeta_5_gnp_monitor_siniestros_selectors",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -5147,9 +5138,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L834",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_parsesiniestrosexcel"
+      "target": "nueva_carpeta_5_gnp_monitor_parsesiniestrosexcel",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -5827,9 +5818,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2198",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_requireremotecontroltoken"
+      "target": "nueva_carpeta_5_gnp_monitor_requireremotecontroltoken",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -5927,9 +5918,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2358",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_pagematchesconfiguredroute"
+      "target": "nueva_carpeta_5_gnp_monitor_pagematchesconfiguredroute",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6127,9 +6118,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2941",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_buildbrowserlaunchoptions"
+      "target": "nueva_carpeta_5_gnp_monitor_buildbrowserlaunchoptions",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6147,9 +6138,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2983",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_getsiniestroscontext"
+      "target": "nueva_carpeta_5_gnp_monitor_getsiniestroscontext",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6197,9 +6188,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3162",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_markmanualloginrequired"
+      "target": "nueva_carpeta_5_gnp_monitor_markmanualloginrequired",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6227,9 +6218,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3250",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_startassistedlogin"
+      "target": "nueva_carpeta_5_gnp_monitor_startassistedlogin",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6337,9 +6328,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3737",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_clickconsultarbydom"
+      "target": "nueva_carpeta_5_gnp_monitor_clickconsultarbydom",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6607,9 +6598,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5350",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_fillsiniestrosautocomplete"
+      "target": "nueva_carpeta_5_gnp_monitor_fillsiniestrosautocomplete",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6617,9 +6608,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5373",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_savesiniestrospdf"
+      "target": "nueva_carpeta_5_gnp_monitor_savesiniestrospdf",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6627,9 +6618,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5389",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_createsiniestrosoutcomecapture"
+      "target": "nueva_carpeta_5_gnp_monitor_createsiniestrosoutcomecapture",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6637,9 +6628,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5447",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_readsiniestrosportalerror"
+      "target": "nueva_carpeta_5_gnp_monitor_readsiniestrosportalerror",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6647,9 +6638,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5458",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_waitforsiniestrosdocumentoutcome"
+      "target": "nueva_carpeta_5_gnp_monitor_waitforsiniestrosdocumentoutcome",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6657,9 +6648,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5496",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_waitforsiniestrossearchresult"
+      "target": "nueva_carpeta_5_gnp_monitor_waitforsiniestrossearchresult",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6667,9 +6658,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5529",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_gotosiniestros"
+      "target": "nueva_carpeta_5_gnp_monitor_gotosiniestros",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6677,9 +6668,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5555",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_triggersiniestrosbuscar"
+      "target": "nueva_carpeta_5_gnp_monitor_triggersiniestrosbuscar",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6687,9 +6678,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5600",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_clicksiniestrosverdocumentos"
+      "target": "nueva_carpeta_5_gnp_monitor_clicksiniestrosverdocumentos",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6697,9 +6688,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5613",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio"
+      "target": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6707,9 +6698,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5654",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_runsiniestros"
+      "target": "nueva_carpeta_5_gnp_monitor_runsiniestros",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6745,21 +6736,11 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6015",
-      "weight": 1.0,
-      "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_buildbrowsercontextpayload",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "gnp-monitor.js",
       "source_location": "L6013",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_buildbrowserpayload"
+      "target": "nueva_carpeta_5_gnp_monitor_buildbrowserpayload",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6787,9 +6768,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L6083",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_getremoteloginpage"
+      "target": "nueva_carpeta_5_gnp_monitor_getremoteloginpage",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6797,9 +6778,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L6112",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_action"
+      "target": "nueva_carpeta_5_gnp_monitor_action",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6807,9 +6788,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L6115",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_xratio"
+      "target": "nueva_carpeta_5_gnp_monitor_xratio",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6817,9 +6798,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L6116",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_yratio"
+      "target": "nueva_carpeta_5_gnp_monitor_yratio",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6827,9 +6808,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L6124",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_text"
+      "target": "nueva_carpeta_5_gnp_monitor_text",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6837,9 +6818,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L6131",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_key"
+      "target": "nueva_carpeta_5_gnp_monitor_key",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6847,9 +6828,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L6132",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_allowedkeys"
+      "target": "nueva_carpeta_5_gnp_monitor_allowedkeys",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6857,9 +6838,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L6139",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_deltay"
+      "target": "nueva_carpeta_5_gnp_monitor_deltay",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6917,9 +6898,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L6212",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_id"
+      "target": "nueva_carpeta_5_gnp_monitor_id",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6927,9 +6908,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L6258",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_queue"
+      "target": "nueva_carpeta_5_gnp_monitor_queue",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -6937,9 +6918,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L6249",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "gnp_monitor_js",
-      "target": "nueva_carpeta_5_gnp_monitor_folios"
+      "target": "nueva_carpeta_5_gnp_monitor_folios",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -7373,9 +7354,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3166",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_markmanualloginrequired",
-      "target": "nueva_carpeta_5_gnp_monitor_nowiso"
+      "target": "nueva_carpeta_5_gnp_monitor_nowiso",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -7439,9 +7420,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5548",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_gotosiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_nowiso"
+      "target": "nueva_carpeta_5_gnp_monitor_nowiso",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -7450,9 +7431,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5669",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_runsiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_nowiso"
+      "target": "nueva_carpeta_5_gnp_monitor_nowiso",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -7846,9 +7827,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2372",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_pagematchesconfiguredroute",
-      "target": "nueva_carpeta_5_gnp_monitor_normalizetext"
+      "target": "nueva_carpeta_5_gnp_monitor_normalizetext",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -7923,9 +7904,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5374",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_savesiniestrospdf",
-      "target": "nueva_carpeta_5_gnp_monitor_normalizetext"
+      "target": "nueva_carpeta_5_gnp_monitor_normalizetext",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -7934,9 +7915,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5449",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_readsiniestrosportalerror",
-      "target": "nueva_carpeta_5_gnp_monitor_normalizetext"
+      "target": "nueva_carpeta_5_gnp_monitor_normalizetext",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -7945,9 +7926,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5515",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_waitforsiniestrossearchresult",
-      "target": "nueva_carpeta_5_gnp_monitor_normalizetext"
+      "target": "nueva_carpeta_5_gnp_monitor_normalizetext",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -8528,9 +8509,9 @@
       "source_file": "tests/pure.test.js",
       "source_location": "L7",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "tests_pure_test_js",
-      "target": "nueva_carpeta_5_gnp_monitor_parsesiniestrosexcel"
+      "target": "nueva_carpeta_5_gnp_monitor_parsesiniestrosexcel",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -8935,9 +8916,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3770",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_clickconsultarbydom",
-      "target": "nueva_carpeta_5_gnp_monitor_serializeerror"
+      "target": "nueva_carpeta_5_gnp_monitor_serializeerror",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -9045,9 +9026,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5719",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_runsiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_serializeerror"
+      "target": "nueva_carpeta_5_gnp_monitor_serializeerror",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -9441,9 +9422,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5462",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_waitforsiniestrosdocumentoutcome",
-      "target": "nueva_carpeta_5_gnp_monitor_assertnotcancelled"
+      "target": "nueva_carpeta_5_gnp_monitor_assertnotcancelled",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -9452,9 +9433,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5499",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_waitforsiniestrossearchresult",
-      "target": "nueva_carpeta_5_gnp_monitor_assertnotcancelled"
+      "target": "nueva_carpeta_5_gnp_monitor_assertnotcancelled",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -9463,9 +9444,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5615",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio",
-      "target": "nueva_carpeta_5_gnp_monitor_assertnotcancelled"
+      "target": "nueva_carpeta_5_gnp_monitor_assertnotcancelled",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -9474,9 +9455,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5701",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_runsiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_assertnotcancelled"
+      "target": "nueva_carpeta_5_gnp_monitor_assertnotcancelled",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -9573,9 +9554,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3003",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_getsiniestroscontext",
-      "target": "nueva_carpeta_5_gnp_monitor_pushlog"
+      "target": "nueva_carpeta_5_gnp_monitor_pushlog",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -9606,9 +9587,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3183",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_markmanualloginrequired",
-      "target": "nueva_carpeta_5_gnp_monitor_pushlog"
+      "target": "nueva_carpeta_5_gnp_monitor_pushlog",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -9694,9 +9675,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3765",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_clickconsultarbydom",
-      "target": "nueva_carpeta_5_gnp_monitor_pushlog"
+      "target": "nueva_carpeta_5_gnp_monitor_pushlog",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -9881,9 +9862,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5571",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_triggersiniestrosbuscar",
-      "target": "nueva_carpeta_5_gnp_monitor_pushlog"
+      "target": "nueva_carpeta_5_gnp_monitor_pushlog",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -9892,9 +9873,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5606",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_clicksiniestrosverdocumentos",
-      "target": "nueva_carpeta_5_gnp_monitor_pushlog"
+      "target": "nueva_carpeta_5_gnp_monitor_pushlog",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -9903,9 +9884,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5683",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_runsiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_pushlog"
+      "target": "nueva_carpeta_5_gnp_monitor_pushlog",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -9980,9 +9961,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3179",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_markmanualloginrequired",
-      "target": "nueva_carpeta_5_gnp_monitor_setstate"
+      "target": "nueva_carpeta_5_gnp_monitor_setstate",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -9991,9 +9972,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3222",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_continueaftermanuallogin",
-      "target": "nueva_carpeta_5_gnp_monitor_setstate"
+      "target": "nueva_carpeta_5_gnp_monitor_setstate",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -10046,9 +10027,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5530",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_gotosiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_setstate"
+      "target": "nueva_carpeta_5_gnp_monitor_setstate",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -10057,9 +10038,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5682",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_runsiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_setstate"
+      "target": "nueva_carpeta_5_gnp_monitor_setstate",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -10189,9 +10170,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5546",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_gotosiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_savesessioninfo"
+      "target": "nueva_carpeta_5_gnp_monitor_savesessioninfo",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -10255,20 +10236,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L6023",
       "weight": 1.0,
-      "source": "nueva_carpeta_5_gnp_monitor_buildbrowsercontextpayload",
+      "source": "nueva_carpeta_5_gnp_monitor_buildbrowserpayload",
       "target": "nueva_carpeta_5_gnp_monitor_sanitizeurlforclient",
       "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "gnp-monitor.js",
-      "source_location": "L6023",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "nueva_carpeta_5_gnp_monitor_buildbrowserpayload",
-      "target": "nueva_carpeta_5_gnp_monitor_sanitizeurlforclient"
     },
     {
       "relation": "calls",
@@ -10420,9 +10390,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2206",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_requireremotecontroltoken",
-      "target": "nueva_carpeta_5_gnp_monitor_requiremonitortoken"
+      "target": "nueva_carpeta_5_gnp_monitor_requiremonitortoken",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -10497,9 +10467,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5902",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_runmonitor",
-      "target": "nueva_carpeta_5_gnp_monitor_clearmanualwatcher"
+      "target": "nueva_carpeta_5_gnp_monitor_clearmanualwatcher",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -10530,9 +10500,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3221",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_continueaftermanuallogin",
-      "target": "nueva_carpeta_5_gnp_monitor_resetmanualloginstate"
+      "target": "nueva_carpeta_5_gnp_monitor_resetmanualloginstate",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -10541,9 +10511,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5681",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_runsiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_resetmanualloginstate"
+      "target": "nueva_carpeta_5_gnp_monitor_resetmanualloginstate",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -10750,9 +10720,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5448",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_readsiniestrosportalerror",
-      "target": "nueva_carpeta_5_gnp_monitor_getsearchtargets"
+      "target": "nueva_carpeta_5_gnp_monitor_getsearchtargets",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -10761,9 +10731,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5505",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_waitforsiniestrossearchresult",
-      "target": "nueva_carpeta_5_gnp_monitor_getsearchtargets"
+      "target": "nueva_carpeta_5_gnp_monitor_getsearchtargets",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -10772,9 +10742,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5556",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_triggersiniestrosbuscar",
-      "target": "nueva_carpeta_5_gnp_monitor_getsearchtargets"
+      "target": "nueva_carpeta_5_gnp_monitor_getsearchtargets",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -10904,9 +10874,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5579",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_triggersiniestrosbuscar",
-      "target": "nueva_carpeta_5_gnp_monitor_clicklocator"
+      "target": "nueva_carpeta_5_gnp_monitor_clicklocator",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -10915,9 +10885,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5605",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_clicksiniestrosverdocumentos",
-      "target": "nueva_carpeta_5_gnp_monitor_clicklocator"
+      "target": "nueva_carpeta_5_gnp_monitor_clicklocator",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -10926,9 +10896,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5635",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio",
-      "target": "nueva_carpeta_5_gnp_monitor_clicklocator"
+      "target": "nueva_carpeta_5_gnp_monitor_clicklocator",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11003,9 +10973,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5351",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_fillsiniestrosautocomplete",
-      "target": "nueva_carpeta_5_gnp_monitor_findvisiblelocator"
+      "target": "nueva_carpeta_5_gnp_monitor_findvisiblelocator",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11014,9 +10984,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5541",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_gotosiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_findvisiblelocator"
+      "target": "nueva_carpeta_5_gnp_monitor_findvisiblelocator",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11025,9 +10995,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5588",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_triggersiniestrosbuscar",
-      "target": "nueva_carpeta_5_gnp_monitor_findvisiblelocator"
+      "target": "nueva_carpeta_5_gnp_monitor_findvisiblelocator",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11036,9 +11006,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5601",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_clicksiniestrosverdocumentos",
-      "target": "nueva_carpeta_5_gnp_monitor_findvisiblelocator"
+      "target": "nueva_carpeta_5_gnp_monitor_findvisiblelocator",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11047,9 +11017,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5620",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio",
-      "target": "nueva_carpeta_5_gnp_monitor_findvisiblelocator"
+      "target": "nueva_carpeta_5_gnp_monitor_findvisiblelocator",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11135,9 +11105,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5624",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio",
-      "target": "nueva_carpeta_5_gnp_monitor_filllocatorvalue"
+      "target": "nueva_carpeta_5_gnp_monitor_filllocatorvalue",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11267,9 +11237,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5537",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_gotosiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_appearsloggedin"
+      "target": "nueva_carpeta_5_gnp_monitor_appearsloggedin",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11344,9 +11314,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5535",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_gotosiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_dismissblockingoverlays"
+      "target": "nueva_carpeta_5_gnp_monitor_dismissblockingoverlays",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11454,9 +11424,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2988",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_getsiniestroscontext",
-      "target": "nueva_carpeta_5_gnp_monitor_preparepageforuse"
+      "target": "nueva_carpeta_5_gnp_monitor_preparepageforuse",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11487,9 +11457,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5531",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_gotosiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_preparepageforuse"
+      "target": "nueva_carpeta_5_gnp_monitor_preparepageforuse",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11498,9 +11468,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5695",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_runsiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_preparepageforuse"
+      "target": "nueva_carpeta_5_gnp_monitor_preparepageforuse",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11509,9 +11479,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L6088",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_getremoteloginpage",
-      "target": "nueva_carpeta_5_gnp_monitor_preparepageforuse"
+      "target": "nueva_carpeta_5_gnp_monitor_preparepageforuse",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11707,9 +11677,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2969",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_getcontext",
-      "target": "nueva_carpeta_5_gnp_monitor_buildbrowserlaunchoptions"
+      "target": "nueva_carpeta_5_gnp_monitor_buildbrowserlaunchoptions",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11718,9 +11688,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L2994",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_getsiniestroscontext",
-      "target": "nueva_carpeta_5_gnp_monitor_buildbrowserlaunchoptions"
+      "target": "nueva_carpeta_5_gnp_monitor_buildbrowserlaunchoptions",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11751,9 +11721,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5688",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_runsiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_getsiniestroscontext"
+      "target": "nueva_carpeta_5_gnp_monitor_getsiniestroscontext",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11762,9 +11732,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3259",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_startassistedlogin",
-      "target": "nueva_carpeta_5_gnp_monitor_getactivepage"
+      "target": "nueva_carpeta_5_gnp_monitor_getactivepage",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11795,9 +11765,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3260",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_startassistedlogin",
-      "target": "nueva_carpeta_5_gnp_monitor_prepareloginpage"
+      "target": "nueva_carpeta_5_gnp_monitor_prepareloginpage",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11828,9 +11798,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3190",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_waitformanuallogin",
-      "target": "nueva_carpeta_5_gnp_monitor_markmanualloginrequired"
+      "target": "nueva_carpeta_5_gnp_monitor_markmanualloginrequired",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11839,9 +11809,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L3262",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_startassistedlogin",
-      "target": "nueva_carpeta_5_gnp_monitor_markmanualloginrequired"
+      "target": "nueva_carpeta_5_gnp_monitor_markmanualloginrequired",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11850,9 +11820,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5746",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_runsiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_markmanualloginrequired"
+      "target": "nueva_carpeta_5_gnp_monitor_markmanualloginrequired",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11861,9 +11831,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5886",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_runmonitor",
-      "target": "nueva_carpeta_5_gnp_monitor_markmanualloginrequired"
+      "target": "nueva_carpeta_5_gnp_monitor_markmanualloginrequired",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -11883,9 +11853,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5698",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_runsiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_ensureloggedin"
+      "target": "nueva_carpeta_5_gnp_monitor_ensureloggedin",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12070,9 +12040,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L4219",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_clickconsultar",
-      "target": "nueva_carpeta_5_gnp_monitor_clickconsultarbydom"
+      "target": "nueva_carpeta_5_gnp_monitor_clickconsultarbydom",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12356,9 +12326,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L4880",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_requestgetpendienteswithcontext",
-      "target": "nueva_carpeta_5_gnp_monitor_text"
+      "target": "nueva_carpeta_5_gnp_monitor_text",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12444,9 +12414,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5617",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio",
-      "target": "nueva_carpeta_5_gnp_monitor_fillsiniestrosautocomplete"
+      "target": "nueva_carpeta_5_gnp_monitor_fillsiniestrosautocomplete",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12455,9 +12425,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5471",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_waitforsiniestrosdocumentoutcome",
-      "target": "nueva_carpeta_5_gnp_monitor_savesiniestrospdf"
+      "target": "nueva_carpeta_5_gnp_monitor_savesiniestrospdf",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12466,9 +12436,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5637",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio",
-      "target": "nueva_carpeta_5_gnp_monitor_createsiniestrosoutcomecapture"
+      "target": "nueva_carpeta_5_gnp_monitor_createsiniestrosoutcomecapture",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12477,9 +12447,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5476",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_waitforsiniestrosdocumentoutcome",
-      "target": "nueva_carpeta_5_gnp_monitor_readsiniestrosportalerror"
+      "target": "nueva_carpeta_5_gnp_monitor_readsiniestrosportalerror",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12488,9 +12458,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5500",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_waitforsiniestrossearchresult",
-      "target": "nueva_carpeta_5_gnp_monitor_readsiniestrosportalerror"
+      "target": "nueva_carpeta_5_gnp_monitor_readsiniestrosportalerror",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12499,9 +12469,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5650",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio",
-      "target": "nueva_carpeta_5_gnp_monitor_waitforsiniestrosdocumentoutcome"
+      "target": "nueva_carpeta_5_gnp_monitor_waitforsiniestrosdocumentoutcome",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12510,9 +12480,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5630",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio",
-      "target": "nueva_carpeta_5_gnp_monitor_waitforsiniestrossearchresult"
+      "target": "nueva_carpeta_5_gnp_monitor_waitforsiniestrossearchresult",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12521,9 +12491,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5614",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio",
-      "target": "nueva_carpeta_5_gnp_monitor_gotosiniestros"
+      "target": "nueva_carpeta_5_gnp_monitor_gotosiniestros",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12532,9 +12502,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5626",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio",
-      "target": "nueva_carpeta_5_gnp_monitor_triggersiniestrosbuscar"
+      "target": "nueva_carpeta_5_gnp_monitor_triggersiniestrosbuscar",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12543,9 +12513,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5638",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio",
-      "target": "nueva_carpeta_5_gnp_monitor_clicksiniestrosverdocumentos"
+      "target": "nueva_carpeta_5_gnp_monitor_clicksiniestrosverdocumentos",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12554,9 +12524,9 @@
       "source_file": "gnp-monitor.js",
       "source_location": "L5705",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_runsiniestros",
-      "target": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio"
+      "target": "nueva_carpeta_5_gnp_monitor_searchsiniestrofolio",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12574,22 +12544,11 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "gnp-monitor.js",
-      "source_location": "L6028",
-      "weight": 1.0,
-      "source": "nueva_carpeta_5_gnp_monitor_buildbrowserpayload",
-      "target": "nueva_carpeta_5_gnp_monitor_buildbrowsercontextpayload",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "gnp-monitor.js",
       "source_location": "L6040",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_gnp_monitor_buildhealthpayload",
-      "target": "nueva_carpeta_5_gnp_monitor_buildbrowserpayload"
+      "target": "nueva_carpeta_5_gnp_monitor_buildbrowserpayload",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12768,9 +12727,9 @@
       "source_file": "railway.json",
       "source_location": "L2",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "railway_json",
-      "target": "nueva_carpeta_5_railway_schema"
+      "target": "nueva_carpeta_5_railway_schema",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -12778,9 +12737,9 @@
       "source_file": "railway.json",
       "source_location": "L3",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "railway_json",
-      "target": "nueva_carpeta_5_railway_build"
+      "target": "nueva_carpeta_5_railway_build",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -12788,9 +12747,9 @@
       "source_file": "railway.json",
       "source_location": "L7",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "railway_json",
-      "target": "nueva_carpeta_5_railway_deploy"
+      "target": "nueva_carpeta_5_railway_deploy",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -12798,9 +12757,9 @@
       "source_file": "railway.json",
       "source_location": "L4",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_railway_build",
-      "target": "nueva_carpeta_5_railway_build_builder"
+      "target": "nueva_carpeta_5_railway_build_builder",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -12808,9 +12767,9 @@
       "source_file": "railway.json",
       "source_location": "L5",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_railway_build",
-      "target": "nueva_carpeta_5_railway_build_dockerfilepath"
+      "target": "nueva_carpeta_5_railway_build_dockerfilepath",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -12818,9 +12777,9 @@
       "source_file": "railway.json",
       "source_location": "L8",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_railway_deploy",
-      "target": "nueva_carpeta_5_railway_deploy_startcommand"
+      "target": "nueva_carpeta_5_railway_deploy_startcommand",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -12828,9 +12787,9 @@
       "source_file": "railway.json",
       "source_location": "L9",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_railway_deploy",
-      "target": "nueva_carpeta_5_railway_deploy_healthcheckpath"
+      "target": "nueva_carpeta_5_railway_deploy_healthcheckpath",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -12838,9 +12797,9 @@
       "source_file": "railway.json",
       "source_location": "L10",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_railway_deploy",
-      "target": "nueva_carpeta_5_railway_deploy_healthchecktimeout"
+      "target": "nueva_carpeta_5_railway_deploy_healthchecktimeout",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -12848,9 +12807,9 @@
       "source_file": "railway.json",
       "source_location": "L11",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_railway_deploy",
-      "target": "nueva_carpeta_5_railway_deploy_restartpolicytype"
+      "target": "nueva_carpeta_5_railway_deploy_restartpolicytype",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -12858,9 +12817,9 @@
       "source_file": "railway.json",
       "source_location": "L12",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_railway_deploy",
-      "target": "nueva_carpeta_5_railway_deploy_restartpolicymaxretries"
+      "target": "nueva_carpeta_5_railway_deploy_restartpolicymaxretries",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -12928,9 +12887,9 @@
       "source_file": "public/app.js",
       "source_location": "L36",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_siniestrosdata"
+      "target": "public_app_siniestrosdata",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -13798,9 +13757,9 @@
       "source_file": "public/app.js",
       "source_location": "L1602",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_showsiniestrosnotice"
+      "target": "public_app_showsiniestrosnotice",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -13808,9 +13767,9 @@
       "source_file": "public/app.js",
       "source_location": "L1610",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_rendersiniestros"
+      "target": "public_app_rendersiniestros",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -13818,9 +13777,9 @@
       "source_file": "public/app.js",
       "source_location": "L1658",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_opensiniestropdf"
+      "target": "public_app_opensiniestropdf",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -13828,9 +13787,9 @@
       "source_file": "public/app.js",
       "source_location": "L1675",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_searchsiniestro"
+      "target": "public_app_searchsiniestro",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -13838,9 +13797,9 @@
       "source_file": "public/app.js",
       "source_location": "L1692",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_importsiniestrosexcel"
+      "target": "public_app_importsiniestrosexcel",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -13968,9 +13927,9 @@
       "source_file": "public/app.js",
       "source_location": "L2000",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_rendererrorbanner"
+      "target": "public_app_rendererrorbanner",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -14048,9 +14007,9 @@
       "source_file": "public/app.js",
       "source_location": "L2160",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_apiblob"
+      "target": "public_app_apiblob",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -14088,9 +14047,9 @@
       "source_file": "public/app.js",
       "source_location": "L2247",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_startmanuallogin"
+      "target": "public_app_startmanuallogin",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -14108,9 +14067,9 @@
       "source_file": "public/app.js",
       "source_location": "L2267",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_pausemonitor"
+      "target": "public_app_pausemonitor",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -14118,9 +14077,9 @@
       "source_file": "public/app.js",
       "source_location": "L2272",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_resumemonitor"
+      "target": "public_app_resumemonitor",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -14148,9 +14107,9 @@
       "source_file": "public/app.js",
       "source_location": "L2287",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_setremoteloginerror"
+      "target": "public_app_setremoteloginerror",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -14158,9 +14117,9 @@
       "source_file": "public/app.js",
       "source_location": "L2293",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_refreshremotelogin"
+      "target": "public_app_refreshremotelogin",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -14168,9 +14127,9 @@
       "source_file": "public/app.js",
       "source_location": "L2319",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_openremotelogin"
+      "target": "public_app_openremotelogin",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -14178,9 +14137,9 @@
       "source_file": "public/app.js",
       "source_location": "L2327",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_closeremotelogin"
+      "target": "public_app_closeremotelogin",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -14188,9 +14147,9 @@
       "source_file": "public/app.js",
       "source_location": "L2335",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_remoteaction"
+      "target": "public_app_remoteaction",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -14198,9 +14157,9 @@
       "source_file": "public/app.js",
       "source_location": "L2347",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_sendremotetext"
+      "target": "public_app_sendremotetext",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -14268,9 +14227,9 @@
       "source_file": "public/app.js",
       "source_location": "L2442",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_js",
-      "target": "public_app_rect"
+      "target": "public_app_rect",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -14682,9 +14641,9 @@
       "source_file": "public/app.js",
       "source_location": "L251",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_setmainview",
-      "target": "public_app_rendersiniestros"
+      "target": "public_app_rendersiniestros",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -14825,9 +14784,9 @@
       "source_file": "public/app.js",
       "source_location": "L1623",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_rendersiniestros",
-      "target": "public_app_clearelement"
+      "target": "public_app_clearelement",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -15826,9 +15785,9 @@
       "source_file": "public/app.js",
       "source_location": "L1671",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_opensiniestropdf",
-      "target": "public_app_showsiniestrosnotice"
+      "target": "public_app_showsiniestrosnotice",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -15837,9 +15796,9 @@
       "source_file": "public/app.js",
       "source_location": "L1684",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_searchsiniestro",
-      "target": "public_app_showsiniestrosnotice"
+      "target": "public_app_showsiniestrosnotice",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -15848,9 +15807,9 @@
       "source_file": "public/app.js",
       "source_location": "L1703",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_importsiniestrosexcel",
-      "target": "public_app_showsiniestrosnotice"
+      "target": "public_app_showsiniestrosnotice",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -15859,9 +15818,9 @@
       "source_file": "public/app.js",
       "source_location": "L2107",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_renderstatus",
-      "target": "public_app_rendersiniestros"
+      "target": "public_app_rendersiniestros",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -15870,9 +15829,9 @@
       "source_file": "public/app.js",
       "source_location": "L1661",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_opensiniestropdf",
-      "target": "public_app_apiblob"
+      "target": "public_app_apiblob",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -15881,9 +15840,9 @@
       "source_file": "public/app.js",
       "source_location": "L1680",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_searchsiniestro",
-      "target": "public_app_apijson"
+      "target": "public_app_apijson",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -15892,9 +15851,9 @@
       "source_file": "public/app.js",
       "source_location": "L1686",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_searchsiniestro",
-      "target": "public_app_fetchstatus"
+      "target": "public_app_fetchstatus",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -15903,9 +15862,9 @@
       "source_file": "public/app.js",
       "source_location": "L1698",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_importsiniestrosexcel",
-      "target": "public_app_apijson"
+      "target": "public_app_apijson",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -15914,9 +15873,9 @@
       "source_file": "public/app.js",
       "source_location": "L1704",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_importsiniestrosexcel",
-      "target": "public_app_fetchstatus"
+      "target": "public_app_fetchstatus",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16024,9 +15983,9 @@
       "source_file": "public/app.js",
       "source_location": "L2091",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_renderstatus",
-      "target": "public_app_rendererrorbanner"
+      "target": "public_app_rendererrorbanner",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16101,9 +16060,9 @@
       "source_file": "public/app.js",
       "source_location": "L2254",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_startmanuallogin",
-      "target": "public_app_fetchstatus"
+      "target": "public_app_fetchstatus",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16123,9 +16082,9 @@
       "source_file": "public/app.js",
       "source_location": "L2269",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_pausemonitor",
-      "target": "public_app_fetchstatus"
+      "target": "public_app_fetchstatus",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16134,9 +16093,9 @@
       "source_file": "public/app.js",
       "source_location": "L2274",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_resumemonitor",
-      "target": "public_app_fetchstatus"
+      "target": "public_app_fetchstatus",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16178,9 +16137,9 @@
       "source_file": "public/app.js",
       "source_location": "L2162",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_apiblob",
-      "target": "public_app_getmonitortoken"
+      "target": "public_app_getmonitortoken",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16211,9 +16170,9 @@
       "source_file": "public/app.js",
       "source_location": "L2169",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_apiblob",
-      "target": "public_app_promptformonitortoken"
+      "target": "public_app_promptformonitortoken",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16266,9 +16225,9 @@
       "source_file": "public/app.js",
       "source_location": "L2249",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_startmanuallogin",
-      "target": "public_app_apipost"
+      "target": "public_app_apipost",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16288,9 +16247,9 @@
       "source_file": "public/app.js",
       "source_location": "L2268",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_pausemonitor",
-      "target": "public_app_apipost"
+      "target": "public_app_apipost",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16299,9 +16258,9 @@
       "source_file": "public/app.js",
       "source_location": "L2273",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_resumemonitor",
-      "target": "public_app_apipost"
+      "target": "public_app_apipost",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16332,9 +16291,9 @@
       "source_file": "public/app.js",
       "source_location": "L2302",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_refreshremotelogin",
-      "target": "public_app_apiblob"
+      "target": "public_app_apiblob",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16343,9 +16302,9 @@
       "source_file": "public/app.js",
       "source_location": "L2337",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_remoteaction",
-      "target": "public_app_apijson"
+      "target": "public_app_apijson",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16354,9 +16313,9 @@
       "source_file": "public/app.js",
       "source_location": "L2250",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_startmanuallogin",
-      "target": "public_app_openremotelogin"
+      "target": "public_app_openremotelogin",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16365,9 +16324,9 @@
       "source_file": "public/app.js",
       "source_location": "L2260",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_continuemanual",
-      "target": "public_app_closeremotelogin"
+      "target": "public_app_closeremotelogin",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16376,9 +16335,9 @@
       "source_file": "public/app.js",
       "source_location": "L2310",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_refreshremotelogin",
-      "target": "public_app_setremoteloginerror"
+      "target": "public_app_setremoteloginerror",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16387,9 +16346,9 @@
       "source_file": "public/app.js",
       "source_location": "L2321",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_openremotelogin",
-      "target": "public_app_setremoteloginerror"
+      "target": "public_app_setremoteloginerror",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16398,9 +16357,9 @@
       "source_file": "public/app.js",
       "source_location": "L2343",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_remoteaction",
-      "target": "public_app_setremoteloginerror"
+      "target": "public_app_setremoteloginerror",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16409,9 +16368,9 @@
       "source_file": "public/app.js",
       "source_location": "L2322",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_openremotelogin",
-      "target": "public_app_refreshremotelogin"
+      "target": "public_app_refreshremotelogin",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16420,9 +16379,9 @@
       "source_file": "public/app.js",
       "source_location": "L2341",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_remoteaction",
-      "target": "public_app_refreshremotelogin"
+      "target": "public_app_refreshremotelogin",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16431,9 +16390,9 @@
       "source_file": "public/app.js",
       "source_location": "L2351",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "public_app_sendremotetext",
-      "target": "public_app_remoteaction"
+      "target": "public_app_remoteaction",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -16503,9 +16462,9 @@
       "source_file": "tests/pure.test.js",
       "source_location": "L5",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "tests_pure_test_js",
-      "target": "tests_pure_test_xlsx"
+      "target": "tests_pure_test_xlsx",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16513,9 +16472,9 @@
       "source_file": "tests/pure.test.js",
       "source_location": "L7",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "tests_pure_test_js",
-      "target": "tests_pure_test_buildgetpendientesurl_comparerows_extractitems_islocalhost_mergecurrentmonthwithopenolderrows_parsesiniestrosexcel_parsedateforsort_publicsessioninfo_sortrows_writejson"
+      "target": "tests_pure_test_buildgetpendientesurl_comparerows_extractitems_islocalhost_mergecurrentmonthwithopenolderrows_parsesiniestrosexcel_parsedateforsort_publicsessioninfo_sortrows_writejson",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16543,9 +16502,9 @@
       "source_file": "tests/pure.test.js",
       "source_location": "L103",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "tests_pure_test_js",
-      "target": "tests_pure_test_siniestrosbook"
+      "target": "tests_pure_test_siniestrosbook",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16583,9 +16542,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L1",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "deployment_md",
-      "target": "nueva_carpeta_5_deployment_gnp_monitor_deployment"
+      "target": "nueva_carpeta_5_deployment_gnp_monitor_deployment",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16593,9 +16552,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L3",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_gnp_monitor_deployment",
-      "target": "nueva_carpeta_5_deployment_local"
+      "target": "nueva_carpeta_5_deployment_local",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16603,9 +16562,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L25",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_gnp_monitor_deployment",
-      "target": "nueva_carpeta_5_deployment_docker"
+      "target": "nueva_carpeta_5_deployment_docker",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16613,9 +16572,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L58",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_gnp_monitor_deployment",
-      "target": "nueva_carpeta_5_deployment_railway"
+      "target": "nueva_carpeta_5_deployment_railway",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16623,9 +16582,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L71",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_gnp_monitor_deployment",
-      "target": "nueva_carpeta_5_deployment_login_asistido"
+      "target": "nueva_carpeta_5_deployment_login_asistido",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16633,9 +16592,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L82",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_gnp_monitor_deployment",
-      "target": "nueva_carpeta_5_deployment_windows_package_for_another_pc"
+      "target": "nueva_carpeta_5_deployment_windows_package_for_another_pc",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16643,9 +16602,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L148",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_gnp_monitor_deployment",
-      "target": "nueva_carpeta_5_deployment_run_with_pm2"
+      "target": "nueva_carpeta_5_deployment_run_with_pm2",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16653,9 +16612,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L166",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_gnp_monitor_deployment",
-      "target": "nueva_carpeta_5_deployment_healthchecks"
+      "target": "nueva_carpeta_5_deployment_healthchecks",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16663,9 +16622,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L175",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_gnp_monitor_deployment",
-      "target": "nueva_carpeta_5_deployment_operational_env_vars"
+      "target": "nueva_carpeta_5_deployment_operational_env_vars",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16673,9 +16632,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L7",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_local",
-      "target": "nueva_carpeta_5_deployment_codeblock_1"
+      "target": "nueva_carpeta_5_deployment_codeblock_1",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16683,9 +16642,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L14",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_local",
-      "target": "nueva_carpeta_5_deployment_codeblock_2"
+      "target": "nueva_carpeta_5_deployment_codeblock_2",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16693,9 +16652,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L29",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_docker",
-      "target": "nueva_carpeta_5_deployment_codeblock_3"
+      "target": "nueva_carpeta_5_deployment_codeblock_3",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16703,9 +16662,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L36",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_docker",
-      "target": "nueva_carpeta_5_deployment_codeblock_4"
+      "target": "nueva_carpeta_5_deployment_codeblock_4",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16713,9 +16672,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L46",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_docker",
-      "target": "nueva_carpeta_5_deployment_codeblock_5"
+      "target": "nueva_carpeta_5_deployment_codeblock_5",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16723,9 +16682,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L86",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_windows_package_for_another_pc",
-      "target": "nueva_carpeta_5_deployment_codeblock_6"
+      "target": "nueva_carpeta_5_deployment_codeblock_6",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16733,9 +16692,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L92",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_windows_package_for_another_pc",
-      "target": "nueva_carpeta_5_deployment_codeblock_7"
+      "target": "nueva_carpeta_5_deployment_codeblock_7",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16743,9 +16702,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L98",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_windows_package_for_another_pc",
-      "target": "nueva_carpeta_5_deployment_codeblock_8"
+      "target": "nueva_carpeta_5_deployment_codeblock_8",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16753,9 +16712,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L115",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_windows_package_for_another_pc",
-      "target": "nueva_carpeta_5_deployment_codeblock_9"
+      "target": "nueva_carpeta_5_deployment_codeblock_9",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16763,9 +16722,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L127",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_windows_package_for_another_pc",
-      "target": "nueva_carpeta_5_deployment_codeblock_10"
+      "target": "nueva_carpeta_5_deployment_codeblock_10",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16773,9 +16732,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L140",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_windows_package_for_another_pc",
-      "target": "nueva_carpeta_5_deployment_codeblock_11"
+      "target": "nueva_carpeta_5_deployment_codeblock_11",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16783,9 +16742,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L150",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_run_with_pm2",
-      "target": "nueva_carpeta_5_deployment_codeblock_12"
+      "target": "nueva_carpeta_5_deployment_codeblock_12",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16793,9 +16752,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L159",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_run_with_pm2",
-      "target": "nueva_carpeta_5_deployment_codeblock_13"
+      "target": "nueva_carpeta_5_deployment_codeblock_13",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16803,9 +16762,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L168",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_healthchecks",
-      "target": "nueva_carpeta_5_deployment_codeblock_14"
+      "target": "nueva_carpeta_5_deployment_codeblock_14",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16813,9 +16772,9 @@
       "source_file": "DEPLOYMENT.md",
       "source_location": "L177",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_deployment_operational_env_vars",
-      "target": "nueva_carpeta_5_deployment_codeblock_15"
+      "target": "nueva_carpeta_5_deployment_codeblock_15",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16823,9 +16782,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L1",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "integracion_codex_md",
-      "target": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor"
+      "target": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -16843,9 +16802,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L5",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_resumen_tecnico"
+      "target": "nueva_carpeta_5_integracion_codex_resumen_tecnico",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16853,9 +16812,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L15",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_archivos_principales"
+      "target": "nueva_carpeta_5_integracion_codex_archivos_principales",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16863,9 +16822,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L29",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_como_ejecutar"
+      "target": "nueva_carpeta_5_integracion_codex_como_ejecutar",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16873,9 +16832,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L53",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_configuracion"
+      "target": "nueva_carpeta_5_integracion_codex_configuracion",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16883,9 +16842,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L80",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_seguridad"
+      "target": "nueva_carpeta_5_integracion_codex_seguridad",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16893,9 +16852,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L98",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_persistencia_y_datos_generados"
+      "target": "nueva_carpeta_5_integracion_codex_persistencia_y_datos_generados",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16903,9 +16862,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L114",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_modelo_sqlite"
+      "target": "nueva_carpeta_5_integracion_codex_modelo_sqlite",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16913,9 +16872,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L127",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_flujo_de_consulta_gnp"
+      "target": "nueva_carpeta_5_integracion_codex_flujo_de_consulta_gnp",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16923,9 +16882,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L160",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_login_manual"
+      "target": "nueva_carpeta_5_integracion_codex_login_manual",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16933,9 +16892,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L171",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_normalizacion_de_ordenes"
+      "target": "nueva_carpeta_5_integracion_codex_normalizacion_de_ordenes",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16943,9 +16902,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L194",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_reglas_de_comparacion"
+      "target": "nueva_carpeta_5_integracion_codex_reglas_de_comparacion",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16953,9 +16912,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L228",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_regla_de_vista_actual"
+      "target": "nueva_carpeta_5_integracion_codex_regla_de_vista_actual",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16963,9 +16922,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L238",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_bitacora"
+      "target": "nueva_carpeta_5_integracion_codex_bitacora",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16973,9 +16932,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L281",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_excel"
+      "target": "nueva_carpeta_5_integracion_codex_excel",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16983,9 +16942,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L297",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_api_http"
+      "target": "nueva_carpeta_5_integracion_codex_api_http",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -16993,9 +16952,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L421",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_frontend"
+      "target": "nueva_carpeta_5_integracion_codex_frontend",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17003,9 +16962,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L488",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_scheduler"
+      "target": "nueva_carpeta_5_integracion_codex_scheduler",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17013,9 +16972,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L492",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_despliegue_windows"
+      "target": "nueva_carpeta_5_integracion_codex_despliegue_windows",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17023,9 +16982,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L521",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_despliegue_docker_linux"
+      "target": "nueva_carpeta_5_integracion_codex_despliegue_docker_linux",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17033,9 +16992,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L536",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_puntos_de_integracion_para_otro_proyecto"
+      "target": "nueva_carpeta_5_integracion_codex_puntos_de_integracion_para_otro_proyecto",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17043,9 +17002,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L591",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_prompt_sugerido_para_codex_al_integrarlo"
+      "target": "nueva_carpeta_5_integracion_codex_prompt_sugerido_para_codex_al_integrarlo",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17053,9 +17012,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L610",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_documentacion_de_funcionalidad_e_integracion_gnp_monitor",
-      "target": "nueva_carpeta_5_integracion_codex_recomendaciones_antes_de_moverlo"
+      "target": "nueva_carpeta_5_integracion_codex_recomendaciones_antes_de_moverlo",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17063,9 +17022,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L33",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_como_ejecutar",
-      "target": "nueva_carpeta_5_integracion_codex_codeblock_1"
+      "target": "nueva_carpeta_5_integracion_codex_codeblock_1",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17073,9 +17032,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L41",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_como_ejecutar",
-      "target": "nueva_carpeta_5_integracion_codex_codeblock_2"
+      "target": "nueva_carpeta_5_integracion_codex_codeblock_2",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17083,9 +17042,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L47",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_como_ejecutar",
-      "target": "nueva_carpeta_5_integracion_codex_codeblock_3"
+      "target": "nueva_carpeta_5_integracion_codex_codeblock_3",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17093,9 +17052,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L301",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_codeblock_4"
+      "target": "nueva_carpeta_5_integracion_codex_codeblock_4",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17103,9 +17062,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L305",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_get"
+      "target": "nueva_carpeta_5_integracion_codex_get",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17113,9 +17072,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L309",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_get_api_health"
+      "target": "nueva_carpeta_5_integracion_codex_get_api_health",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17123,9 +17082,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L327",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_get_api_status"
+      "target": "nueva_carpeta_5_integracion_codex_get_api_status",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17133,9 +17092,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L350",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_get_api_bitacora"
+      "target": "nueva_carpeta_5_integracion_codex_get_api_bitacora",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17143,9 +17102,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L354",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_get_api_bitacora_id_history"
+      "target": "nueva_carpeta_5_integracion_codex_get_api_bitacora_id_history",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17153,9 +17112,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L358",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_get_api_bitacora_excel"
+      "target": "nueva_carpeta_5_integracion_codex_get_api_bitacora_excel",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17163,9 +17122,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L362",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_post_api_bitacora_import_excel"
+      "target": "nueva_carpeta_5_integracion_codex_post_api_bitacora_import_excel",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17173,9 +17132,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L366",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_post_api_bitacora"
+      "target": "nueva_carpeta_5_integracion_codex_post_api_bitacora",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17183,9 +17142,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L393",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_put_api_bitacora_id"
+      "target": "nueva_carpeta_5_integracion_codex_put_api_bitacora_id",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17193,9 +17152,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L397",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_delete_api_bitacora_id"
+      "target": "nueva_carpeta_5_integracion_codex_delete_api_bitacora_id",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17203,9 +17162,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L401",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_post_api_bitacora_id_restore"
+      "target": "nueva_carpeta_5_integracion_codex_post_api_bitacora_id_restore",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17213,9 +17172,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L405",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_post_api_run"
+      "target": "nueva_carpeta_5_integracion_codex_post_api_run",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17223,9 +17182,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L409",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_post_api_continue_manual_login"
+      "target": "nueva_carpeta_5_integracion_codex_post_api_continue_manual_login",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17233,9 +17192,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L413",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_post_api_cancel"
+      "target": "nueva_carpeta_5_integracion_codex_post_api_cancel",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17243,9 +17202,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L417",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_api_http",
-      "target": "nueva_carpeta_5_integracion_codex_post_api_restart_browser"
+      "target": "nueva_carpeta_5_integracion_codex_post_api_restart_browser",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17253,9 +17212,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L372",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_post_api_bitacora",
-      "target": "nueva_carpeta_5_integracion_codex_codeblock_5"
+      "target": "nueva_carpeta_5_integracion_codex_codeblock_5",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17263,9 +17222,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L433",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_frontend",
-      "target": "nueva_carpeta_5_integracion_codex_monitor"
+      "target": "nueva_carpeta_5_integracion_codex_monitor",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17273,9 +17232,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L453",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_frontend",
-      "target": "nueva_carpeta_5_integracion_codex_bitacora_ui"
+      "target": "nueva_carpeta_5_integracion_codex_bitacora_ui",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17283,9 +17242,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L475",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_frontend",
-      "target": "nueva_carpeta_5_integracion_codex_polling_y_token"
+      "target": "nueva_carpeta_5_integracion_codex_polling_y_token",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17293,9 +17252,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L496",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_despliegue_windows",
-      "target": "nueva_carpeta_5_integracion_codex_codeblock_6"
+      "target": "nueva_carpeta_5_integracion_codex_codeblock_6",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17303,9 +17262,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L502",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_despliegue_windows",
-      "target": "nueva_carpeta_5_integracion_codex_codeblock_7"
+      "target": "nueva_carpeta_5_integracion_codex_codeblock_7",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17313,9 +17272,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L517",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_despliegue_windows",
-      "target": "nueva_carpeta_5_integracion_codex_codeblock_8"
+      "target": "nueva_carpeta_5_integracion_codex_codeblock_8",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17323,9 +17282,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L527",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_despliegue_docker_linux",
-      "target": "nueva_carpeta_5_integracion_codex_codeblock_9"
+      "target": "nueva_carpeta_5_integracion_codex_codeblock_9",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17333,9 +17292,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L538",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_puntos_de_integracion_para_otro_proyecto",
-      "target": "nueva_carpeta_5_integracion_codex_opcion_1_integrar_por_api_http"
+      "target": "nueva_carpeta_5_integracion_codex_opcion_1_integrar_por_api_http",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17343,9 +17302,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L556",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_puntos_de_integracion_para_otro_proyecto",
-      "target": "nueva_carpeta_5_integracion_codex_opcion_2_reutilizar_funciones_puras"
+      "target": "nueva_carpeta_5_integracion_codex_opcion_2_reutilizar_funciones_puras",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17353,9 +17312,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L576",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_puntos_de_integracion_para_otro_proyecto",
-      "target": "nueva_carpeta_5_integracion_codex_opcion_3_extraer_modulos"
+      "target": "nueva_carpeta_5_integracion_codex_opcion_3_extraer_modulos",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17363,9 +17322,9 @@
       "source_file": "INTEGRACION_CODEX.md",
       "source_location": "L593",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_integracion_codex_prompt_sugerido_para_codex_al_integrarlo",
-      "target": "nueva_carpeta_5_integracion_codex_codeblock_10"
+      "target": "nueva_carpeta_5_integracion_codex_codeblock_10",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17373,9 +17332,9 @@
       "source_file": "PROMPT_CODEX_INTEGRACION.md",
       "source_location": "L1",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "prompt_codex_integracion_md",
-      "target": "nueva_carpeta_5_prompt_codex_integracion_prompt_para_codex_integrar_gnp_monitor_en_otro_proyecto"
+      "target": "nueva_carpeta_5_prompt_codex_integracion_prompt_para_codex_integrar_gnp_monitor_en_otro_proyecto",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17383,9 +17342,9 @@
       "source_file": "PROMPT_CODEX_INTEGRACION.md",
       "source_location": "L5",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_prompt_codex_integracion_prompt_para_codex_integrar_gnp_monitor_en_otro_proyecto",
-      "target": "nueva_carpeta_5_prompt_codex_integracion_codeblock_1"
+      "target": "nueva_carpeta_5_prompt_codex_integracion_codeblock_1",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17393,9 +17352,9 @@
       "source_file": "PROMPT_CODEX_INTEGRACION.md",
       "source_location": "L151",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_prompt_codex_integracion_prompt_para_codex_integrar_gnp_monitor_en_otro_proyecto",
-      "target": "nueva_carpeta_5_prompt_codex_integracion_inventario_rapido_del_proyecto_fuente"
+      "target": "nueva_carpeta_5_prompt_codex_integracion_inventario_rapido_del_proyecto_fuente",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -17403,9 +17362,9 @@
       "source_file": "PROMPT_CODEX_INTEGRACION.md",
       "source_location": "L165",
       "weight": 1.0,
-      "confidence_score": 1.0,
       "source": "nueva_carpeta_5_prompt_codex_integracion_prompt_para_codex_integrar_gnp_monitor_en_otro_proyecto",
-      "target": "nueva_carpeta_5_prompt_codex_integracion_nota_para_integracion_por_api_en_vez_de_duplicar_codigo"
+      "target": "nueva_carpeta_5_prompt_codex_integracion_nota_para_integracion_por_api_en_vez_de_duplicar_codigo",
+      "confidence_score": 1.0
     }
   ],
   "hyperedges": [],
