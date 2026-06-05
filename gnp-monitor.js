@@ -75,6 +75,11 @@ const CONFIG = {
   axaSiniestrosUrl:
     process.env.AXA_SINIESTROS_URL ||
     "https://cloud.distribuidores.axa.com.mx/group/distribucion/distribucion-gestion/autos",
+  axaNavigationTimeoutMs: Math.max(Number(process.env.AXA_NAVIGATION_TIMEOUT_SECONDS || 120), 30) * 1000,
+  axaNetworkIdleTimeoutMs: Math.max(Number(process.env.AXA_NETWORK_IDLE_TIMEOUT_SECONDS || 45), 10) * 1000,
+  axaReadyTimeoutMs: Math.max(Number(process.env.AXA_READY_TIMEOUT_SECONDS || 90), 20) * 1000,
+  axaPageChangeTimeoutMs: Math.max(Number(process.env.AXA_PAGE_CHANGE_TIMEOUT_SECONDS || 45), 10) * 1000,
+  axaMaxPages: Math.max(Number(process.env.AXA_MAX_PAGES || 50), 1),
   browserChannel: getBrowserChannel(),
   profileDir: getProfileDir(),
   email: process.env.GNP_EMAIL || "",
@@ -179,18 +184,20 @@ const LOGIN_SELECTORS = {
     '.login',
   ],
   email: [
-    '#user',
+    'input[formcontrolname="mail"]',
+    'input[name^="correo"]',
+    'input[name*="correo" i]',
+    'input[id="mat-input-0"][type="text"]',
     'input[name="username"]',
     'input[id^="mat-input-"][type="text"]',
     'input[type="text"]',
     'input[type="email"]',
-    'input[name*="correo" i]',
     'input[id*="correo" i]',
     'input[placeholder*="correo" i]',
     'input[name*="user" i]',
   ],
   password: [
-    '#pwd',
+    'input[formcontrolname="password"]',
     'input[name="password"]',
     'input[type="password"]',
     'input[name*="password" i]',
@@ -646,12 +653,6 @@ function publicUser(user) {
 }
 
 function seedAdminUser(database) {
-  const total = database
-    .prepare("SELECT COUNT(*) AS total FROM users WHERE role = 'admin' AND active = 1")
-    .get().total;
-  if (total > 0) {
-    return;
-  }
   const now = nowIso();
   const username = normalizeText(CONFIG.adminUsername);
   const existing = database.prepare("SELECT id FROM users WHERE lower(username) = lower(?)").get(username);
@@ -667,6 +668,12 @@ function seedAdminUser(database) {
         WHERE id = ?
       `)
       .run(hashPassword(CONFIG.adminPassword), "Administrador", now, existing.id);
+    return;
+  }
+  const total = database
+    .prepare("SELECT COUNT(*) AS total FROM users WHERE role = 'admin' AND active = 1")
+    .get().total;
+  if (total > 0) {
     return;
   }
   database
@@ -1073,7 +1080,7 @@ function dbRowToBitacora(row) {
     estado: row.estado || "",
     cliente: row.cliente || "",
     poliza: row.poliza || "",
-    aseguradora: row.aseguradora || "",
+    aseguradora: normalizeAseguradora(row.aseguradora),
     descripcion: row.descripcion || "",
     folio: row.folio || "",
     comentarios: row.comentarios || "",
@@ -1195,7 +1202,7 @@ function sanitizeBitacoraEntry(input = {}, previous = {}) {
     estado: normalizeText(input.estado),
     cliente: normalizeText(input.cliente),
     poliza: normalizeText(input.poliza),
-    aseguradora: normalizeText(input.aseguradora),
+    aseguradora: normalizeAseguradora(input.aseguradora || previous.aseguradora),
     descripcion: normalizeText(input.descripcion),
     folio: normalizeText(input.folio),
     comentarios: normalizeText(input.comentarios),
@@ -1243,7 +1250,7 @@ function inferBitacoraRamo(entry = {}, monitorRow = null) {
   if (source.includes("gmm") || source.includes("gastos medicos")) return "GMM";
   if (source.includes("vida")) return "Vida";
   if (source.includes("auto")) return "Autos";
-  if (source.includes("dano") || source.includes("danos") || source.includes("da?o")) return "Daño";
+  if (source.includes("dano") || source.includes("danos") || source.includes("da?o")) return "Daños";
   return "";
 }
 
@@ -1253,7 +1260,15 @@ function normalizeRamo(value) {
   if (text.includes("gmm") || text.includes("gastos medicos")) return "GMM";
   if (text.includes("vida")) return "Vida";
   if (text.includes("auto")) return "Autos";
-  if (text.includes("dano") || text.includes("danos") || text.includes("da?o")) return "Daño";
+  if (text.includes("dano") || text.includes("danos") || text.includes("da?o")) return "Daños";
+  return "";
+}
+
+function normalizeAseguradora(value) {
+  const text = normalizeLoose(value);
+  if (!text) return "";
+  if (text.includes("gnp")) return "GNP";
+  if (text.includes("axa")) return "AXA";
   return "";
 }
 
@@ -2573,6 +2588,65 @@ function parseAxaListadoText(text) {
     });
 }
 
+function parseAxaSiniestrosListadoText(text) {
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map((line) => normalizeText(line))
+    .filter(Boolean);
+  const isClaimNumber = (value) =>
+    /^[A-Z]?[0-9][A-Z0-9-]{4,}$/i.test(value) && !/^\d{4}-\d{1,2}-\d{1,2}$/.test(value);
+  const isLabel = (value) =>
+    /^(asegurado|no\.?\s*de\s*p[oó]liza|tipo de siniestro|fecha del registro|estatus|nombre y apellido|fecha inicio|fecha fin)$/i
+      .test(normalizeLoose(value));
+  const valueAfter = (block, labelRegex) => {
+    const index = block.findIndex((line) => labelRegex.test(normalizeLoose(line)));
+    if (index === -1) return "";
+    for (let offset = index + 1; offset < block.length; offset += 1) {
+      const candidate = block[offset];
+      if (candidate && !isLabel(candidate)) return candidate;
+    }
+    return "";
+  };
+  const rows = [];
+  const seen = new Set();
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const candidate = lines[index];
+    const block = lines.slice(index, index + 25);
+    if (!isClaimNumber(candidate)) continue;
+    if (!block.some((line) => /asegurado/i.test(normalizeLoose(line)))) continue;
+    if (!block.some((line) => /tipo de siniestro|no\.?\s*de\s*poliza/i.test(normalizeLoose(line)))) continue;
+
+    const key = candidate.toUpperCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const statusCandidate = block[1] && !isLabel(block[1]) ? block[1] : "";
+    const tipoSiniestro = valueAfter(block, /tipo de siniestro/i);
+    const rawText = block.join("\n");
+    rows.push({
+      siniestro: candidate,
+      estadoPago: /^(abierto|cerrado|pagado|rechazado|en proceso|pendiente)$/i.test(statusCandidate)
+        ? statusCandidate
+        : "",
+      ramo: /da[nñ]os?/i.test(tipoSiniestro) ? "Daños" : "",
+      asegurado: valueAfter(block, /^asegurado$/i),
+      poliza: valueAfter(block, /no\.?\s*de\s*poliza/i),
+      tipoSiniestro,
+      fechaRegistro: valueAfter(block, /fecha del registro/i),
+      detalleUrl: "",
+      fechaSiniestro: "",
+      tipoTramite: "",
+      fechaSolicitud: "",
+      compromisoRespuesta: "",
+      etapaActual: "",
+      etapas: [],
+      rawText: rawText.slice(0, 1200),
+    });
+  }
+
+  return rows.filter((row) => row.siniestro && (row.asegurado || row.poliza || row.tipoSiniestro));
+}
+
 function normalizeMonitorRows(items, mapper = mapItem) {
   return sortRows(
     (Array.isArray(items) ? items : extractItems(items))
@@ -3115,10 +3189,6 @@ app.use("/api/siniestros/import-excel", express.raw({
   type: "application/octet-stream",
   limit: "25mb",
 }));
-app.use("/api/axa/siniestros/import-excel", express.raw({
-  type: "application/octet-stream",
-  limit: "25mb",
-}));
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -3410,6 +3480,19 @@ async function fillFirst(page, selectors, value, timeout = 10000) {
 
 async function fillLocatorValue(locator, value) {
   const text = String(value ?? "");
+  const canReceiveText = await locator.evaluate((node) => {
+    const tag = String(node.tagName || "").toLowerCase();
+    return tag === "input" || tag === "textarea" || Boolean(node.isContentEditable);
+  }).catch(() => false);
+  if (!canReceiveText) {
+    return false;
+  }
+  const hasExpectedValue = async () => locator.evaluate((node, expected) => {
+    const tag = String(node.tagName || "").toLowerCase();
+    const current = tag === "input" || tag === "textarea" ? node.value : node.textContent;
+    return String(current || "") === String(expected || "");
+  }, text).catch(() => false);
+
   try {
     await locator.scrollIntoViewIfNeeded().catch(() => {});
     await locator.click({ timeout: 1500 }).catch(() => {});
@@ -3420,7 +3503,7 @@ async function fillLocatorValue(locator, value) {
       node.dispatchEvent(new Event("change", { bubbles: true }));
       node.dispatchEvent(new Event("blur", { bubbles: true }));
     }).catch(() => {});
-    return true;
+    return hasExpectedValue();
   } catch {
     try {
       await locator.click({ timeout: 1500 }).catch(() => {});
@@ -3433,7 +3516,7 @@ async function fillLocatorValue(locator, value) {
         node.dispatchEvent(new Event("change", { bubbles: true }));
         node.dispatchEvent(new Event("blur", { bubbles: true }));
       }).catch(() => {});
-      return true;
+      return hasExpectedValue();
     } catch {
       return false;
     }
@@ -6819,8 +6902,8 @@ async function searchSiniestroFolio(page, folio) {
 async function gotoAxaSiniestros(page) {
   setState("siniestros", "Abriendo portal AXA...");
   await preparePageForUse(page);
-  await page.goto(CONFIG.axaSiniestrosUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
-  await page.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
+  await page.goto(CONFIG.axaSiniestrosUrl, { waitUntil: "domcontentloaded", timeout: CONFIG.axaNavigationTimeoutMs });
+  await page.waitForLoadState("networkidle", { timeout: CONFIG.axaNetworkIdleTimeoutMs }).catch(() => {});
   await page.waitForTimeout(800);
   const preparedLogin = await prepareAxaLoginIfVisible(page);
   if (preparedLogin.loginVisible) {
@@ -6835,12 +6918,12 @@ async function gotoAxaSiniestros(page) {
     if (preparedLogin.captchaDetected) {
       throw new Error("AXA requiere captcha o validacion manual para Siniestros.");
     }
-    await page.goto(CONFIG.axaSiniestrosUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
-    await page.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
+    await page.goto(CONFIG.axaSiniestrosUrl, { waitUntil: "domcontentloaded", timeout: CONFIG.axaNavigationTimeoutMs });
+    await page.waitForLoadState("networkidle", { timeout: CONFIG.axaNetworkIdleTimeoutMs }).catch(() => {});
     await page.waitForTimeout(1000);
   }
 
-  const field = await findVisibleLocator(page, AXA_SINIESTROS_SELECTORS.folio, 25000);
+  const field = await findVisibleLocator(page, AXA_SINIESTROS_SELECTORS.folio, CONFIG.axaReadyTimeoutMs);
   if (!field) {
     throw new Error("No aparecio el campo Numero de Siniestro en el portal AXA.");
   }
@@ -6848,279 +6931,182 @@ async function gotoAxaSiniestros(page) {
   return page;
 }
 
-function normalizeAxaSiniestrosRamo(value) {
-  const text = normalizeLoose(value || "Autos");
-  if (text.includes("salud")) return { value: "Salud", label: "Salud" };
-  if (text.includes("dan") || text.includes("dañ") || text.includes("pr")) return { value: "PR", label: "Danos" };
-  return { value: "AUTO", label: "Autos" };
-}
-
-async function selectAxaSiniestrosRamo(page, ramo) {
-  const normalized = normalizeAxaSiniestrosRamo(ramo);
-  await page.evaluate(({ value, label }) => {
-    const clean = (input) => String(input || "").replace(/\s+/g, " ").trim();
-    const select = document.querySelector('select[id$="selectSearchBussinessLine"], select[name$="selectSearchBussinessLine"]');
-    if (select) {
-      select.value = value;
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-      select.dispatchEvent(new Event("input", { bubbles: true }));
-      const wrapper = select.closest(".select");
-      const styled = wrapper?.querySelector(".select-styled");
-      if (styled) styled.textContent = label === "Danos" ? "Daños" : label;
-      const option = wrapper?.querySelector(`li[rel="${value}"]`);
-      if (option) option.click();
-      return true;
+function mergeAxaSiniestrosRows(...rowGroups) {
+  const merged = [];
+  const seen = new Set();
+  for (const group of rowGroups) {
+    for (const row of Array.isArray(group) ? group : []) {
+      const key = normalizeText(row?.siniestro || row?.folio);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push({
+        siniestro: key,
+        fechaSiniestro: normalizeText(row.fechaSiniestro),
+        estadoPago: normalizeText(row.estadoPago),
+        tipoTramite: normalizeText(row.tipoTramite),
+        fechaSolicitud: normalizeText(row.fechaSolicitud),
+        compromisoRespuesta: normalizeText(row.compromisoRespuesta),
+        etapaActual: normalizeText(row.etapaActual),
+        etapas: Array.isArray(row.etapas) ? row.etapas.map(normalizeText).filter(Boolean) : [],
+        ramo: normalizeText(row.ramo),
+        asegurado: normalizeText(row.asegurado),
+        poliza: normalizeText(row.poliza),
+        tipoSiniestro: normalizeText(row.tipoSiniestro),
+        fechaRegistro: normalizeText(row.fechaRegistro),
+        detalleUrl: normalizeText(row.detalleUrl),
+        rawText: normalizeText(row.rawText).slice(0, 1200),
+      });
     }
-    const candidates = Array.from(document.querySelectorAll("li, option, button, a, div, span"));
-    const item = candidates.find((node) => {
-      const text = clean(node.textContent).toLowerCase();
-      return text === label.toLowerCase() || (label === "Danos" && text === "daños");
-    });
-    if (item) {
-      item.click();
-      return true;
-    }
-    return false;
-  }, normalized).catch(() => false);
-  await page.waitForTimeout(400);
-  pushLog("axa_siniestros", "Ramo AXA seleccionado.", normalized);
-  return normalized;
-}
-
-async function readAxaSiniestrosValidation(page) {
-  for (const selector of AXA_SINIESTROS_SELECTORS.mensajeReclamacion) {
-    const text = normalizeText(await page.locator(selector).first().innerText({ timeout: 500 }).catch(() => ""));
-    if (text && /no se encontraron|reclamaci|siniestro|error|debes ingresar/i.test(text)) return text;
   }
-  return "";
+  return merged;
 }
 
-async function waitForAxaConsultButton(page, timeout = 12000) {
-  const deadline = Date.now() + timeout;
-  while (Date.now() < deadline) {
-    assertNotCancelled();
-    const inputReady = await page.locator(AXA_SINIESTROS_SELECTORS.folio.join(", ")).first().evaluate((node) => {
-      const className = String(node.className || "");
-      return Boolean(node.value) || className.includes("input-success") || className.includes("success");
-    }).catch(() => false);
-    const blockedVisible = await page.locator(AXA_SINIESTROS_SELECTORS.consultarBloqueado.join(", ")).first()
-      .isVisible()
-      .catch(() => false);
-    for (const selector of AXA_SINIESTROS_SELECTORS.consultar) {
-      const locator = page.locator(selector).first();
-      if (!(await locator.count().catch(() => 0))) continue;
-      const visible = await locator.isVisible().catch(() => false);
-      const enabled = await locator.isEnabled().catch(() => true);
-      const box = await locator.boundingBox().catch(() => null);
-      if (visible && enabled && box && (inputReady || !blockedVisible)) {
-        return locator;
-      }
+function extractAxaSiniestrosRowsFromDocument(document = globalThis.document) {
+  if (!document) return [];
+  const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+  const loose = (value) => clean(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const isHidden = (node) => {
+    const className = String(node.className || "");
+    const style = node.ownerDocument?.defaultView?.getComputedStyle?.(node);
+    return style?.display === "none" || style?.visibility === "hidden" || className.includes("hideItem");
+  };
+  const readByLabel = (card, labelPattern) => {
+    const columns = Array.from(card.querySelectorAll("[class*='col-']"));
+    for (const column of columns) {
+      const labels = Array.from(column.querySelectorAll(".headerResultClaim, .headerResultFolio"))
+        .filter((label) => !label.querySelector(".resultClaim, .resultFolio"));
+      const matched = labels.find((label) => labelPattern.test(loose(label.textContent)));
+      if (!matched) continue;
+      const values = Array.from(column.querySelectorAll(".resultClaim, .resultFolio"))
+        .map((value) => clean(value.textContent))
+        .filter(Boolean);
+      if (values.length) return values[0];
+      const text = clean(column.textContent).replace(clean(matched.textContent), "").trim();
+      if (text) return text;
     }
-
-    const validation = await readAxaSiniestrosValidation(page);
-    if (validation) {
-      throw new Error(validation);
-    }
-    await page.waitForTimeout(300);
-  }
-  throw new Error("AXA no habilito el boton Consultar despues de salir del campo de folio.");
+    return "";
+  };
+  const inferRamo = (card, tipoSiniestro) => {
+    const icon = clean(card.querySelector(".icon-ramo img")?.getAttribute("src") || "");
+    if (/PR|damage|dan/i.test(icon) || /da[nñ]os?/i.test(tipoSiniestro)) return "Daños";
+    if (/salud|plaster|crutch|gmm/i.test(icon)) return "Salud";
+    if (/auto/i.test(icon)) return "Autos";
+    return "";
+  };
+  const cards = Array.from(document.querySelectorAll("#cards-container .box-shadow-siniestros, [id$='container-salud'] .box-shadow-siniestros, .box-shadow-siniestros"))
+    .filter((card) => !isHidden(card) && !card.closest("#resultnotFound"));
+  return cards
+    .map((card) => {
+      const text = clean(card.textContent);
+      const siniestro =
+        clean(card.querySelector(".font-siniestro")?.textContent) ||
+        clean(card.querySelector(".numeroSiniestro")?.textContent) ||
+        clean(Array.from(card.querySelectorAll(".headerResultClaim, .headerResultFolio"))
+          .find((node) => /^[A-Z]?[0-9][A-Z0-9-]{4,}$/i.test(clean(node.textContent)))?.textContent || "");
+      const tipoSiniestro = readByLabel(card, /tipo de siniestro|tipo de servicio/);
+      const detalleLink = Array.from(card.querySelectorAll("a")).find((link) =>
+        /ver detalle|carta respuesta|informacion adicional|información adicional/i.test(clean(link.textContent || ""))
+      );
+      return {
+        siniestro,
+        estadoPago: clean(card.querySelector(".textoEstatus, .text-folio, [class*='textoEstatus']")?.textContent || ""),
+        ramo: inferRamo(card, tipoSiniestro),
+        asegurado: readByLabel(card, /^asegurado$/),
+        poliza: readByLabel(card, /no\.?\s*de\s*poliza|poliza/),
+        tipoSiniestro,
+        fechaRegistro: readByLabel(card, /fecha del registro|registro del tramite/),
+        fechaSiniestro: "",
+        tipoTramite: readByLabel(card, /tipo de servicio/),
+        fechaSolicitud: readByLabel(card, /fecha de solicitud/),
+        compromisoRespuesta: readByLabel(card, /compromiso|respuesta/),
+        etapaActual: "",
+        etapas: [],
+        detalleUrl: detalleLink?.href || "",
+        rawText: text.slice(0, 1200),
+      };
+    })
+    .filter((row) => row.siniestro && (row.asegurado || row.poliza || row.tipoSiniestro || row.fechaRegistro));
 }
 
-async function fillAxaSiniestroFolio(page, folio) {
-  const field = await findVisibleLocator(page, AXA_SINIESTROS_SELECTORS.folio, 20000);
-  if (!field) {
-    throw new Error("No encontre el campo Numero de Folio de AXA.");
-  }
-
-  await field.locator.scrollIntoViewIfNeeded().catch(() => {});
-  await field.locator.click({ timeout: 2000 });
-  await field.locator.fill("");
-  await field.locator.type(folio, { delay: 35 });
-  await field.locator.evaluate((node) => {
-    node.dispatchEvent(new Event("input", { bubbles: true }));
-    node.dispatchEvent(new Event("change", { bubbles: true }));
+async function readAxaSiniestrosCurrentRows(page) {
+  await page.waitForFunction(() => /Consulta de siniestros|Asegurado|Tipo de siniestro|No\.de P/i.test(document.body?.innerText || ""), null, {
+    timeout: CONFIG.axaReadyTimeoutMs,
   }).catch(() => {});
 
-  // AXA habilita el boton hasta que el input pierde foco.
-  await field.locator.press("Tab").catch(async () => {
-    await field.locator.evaluate((node) => {
-      node.blur();
-      node.dispatchEvent(new FocusEvent("blur", { bubbles: true }));
-    }).catch(() => {});
-  });
-  await page.waitForTimeout(900);
+  const domRows = await page.evaluate(extractAxaSiniestrosRowsFromDocument).catch(() => []);
+
+  const bodyText = await page.locator("body").innerText({ timeout: CONFIG.axaNetworkIdleTimeoutMs }).catch(() => "");
+  return mergeAxaSiniestrosRows(domRows, parseAxaSiniestrosListadoText(bodyText));
 }
 
-function normalizeExtractedLabel(value) {
-  return normalizeLoose(value).replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-async function extractAxaSiniestroInfo(page, fallbackFolio = "") {
-  return page.evaluate(({ fallbackFolio }) => {
+async function getAxaSiniestrosPageSignature(page) {
+  return page.evaluate(() => {
     const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
-    const rawText = String(document.body?.innerText || "");
-    const body = clean(rawText);
-    const lines = rawText.split(/\n|\r/).map(clean).filter(Boolean);
-    const result = {
-      siniestro: "",
-      fechaSiniestro: "",
-      estadoPago: "",
-      tipoTramite: "",
-      folio: fallbackFolio,
-      fechaSolicitud: "",
-      compromisoRespuesta: "",
-      etapaActual: "",
-      etapas: [],
-      ramo: "",
-      asegurado: "",
-      poliza: "",
-      tipoSiniestro: "",
-      fechaRegistro: "",
-      detalleUrl: "",
-      rawText: body.slice(0, 2000),
-    };
-
-    const cards = Array.from(document.querySelectorAll(".box-shadow-siniestros, #cards-container > div, #container-salud > div"));
-    const card = cards.find((item) => clean(item.textContent).includes(fallbackFolio)) || cards[0] || null;
-    if (card) {
-      const cardText = clean(card.textContent);
-      const claimNode = card.querySelector(".font-siniestro, .numeroSiniestro, .headerResultClaim");
-      result.siniestro = clean(claimNode?.textContent || "") || fallbackFolio;
-      const statusNode = card.querySelector(".textoEstatus, [class*='estatusClaim']");
-      result.estadoPago = clean(statusNode?.textContent || "");
-      const link = Array.from(card.querySelectorAll("a")).find((node) =>
-        /claimNumber|ver detalle/i.test(`${node.href || ""} ${clean(node.textContent)}`)
-      );
-      result.detalleUrl = link?.href || "";
-      const values = Array.from(card.querySelectorAll(".resultClaim, .resultFolio")).map((node) => clean(node.textContent)).filter(Boolean);
-      if (values.length >= 4) {
-        result.asegurado = values[0] || "";
-        result.poliza = values[1] || "";
-        result.tipoSiniestro = values[2] || "";
-        result.fechaRegistro = values[3] || "";
-      } else if (values.length) {
-        result.asegurado = values[0] || "";
-        result.poliza = values[1] || "";
-        result.tipoSiniestro = values[2] || "";
-      }
-      const icon = card.querySelector(".icon-ramo img");
-      const iconText = clean(icon?.getAttribute("src") || "");
-      result.ramo = /PR|dan/i.test(iconText) ? "Danos" : /salud|plaster|crutch/i.test(iconText) ? "Salud" : "Autos";
-      if (!result.fechaRegistro) {
-        const dateMatch = cardText.match(/\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}\/\d{1,2}\/\d{4}\b/);
-        if (dateMatch) result.fechaRegistro = dateMatch[0];
-      }
-    }
-
-    const siniestroMatch = body.match(/Siniestro:\s*([A-Za-z0-9-]+)/i);
-    if (siniestroMatch && !result.siniestro) result.siniestro = siniestroMatch[1];
-    const fechaSinMatch = body.match(/Fecha del siniestro:\s*([0-9]{1,2}\/[0-9]{1,2}\/[0-9]{4})/i);
-    if (fechaSinMatch) result.fechaSiniestro = fechaSinMatch[1];
-    const folioMatch = body.match(/Folio:\s*([A-Za-z0-9-]+)/i);
-    if (folioMatch) result.folio = folioMatch[1];
-
-    const statusCandidates = ["PAGADO", "INFORMACION ADICIONAL", "RECHAZADO", "EN PROCESO", "PENDIENTE"];
-    result.estadoPago = result.estadoPago || statusCandidates.find((item) => body.toUpperCase().includes(item)) || "";
-    result.tipoTramite = ["REEMBOLSO", "PROGRAMACION", "PAGO DIRECTO"].find((item) => body.toUpperCase().includes(item)) || "";
-
-    const valueAfter = (label) => {
-      const index = lines.findIndex((line) => line.toLowerCase().includes(label.toLowerCase()));
-      if (index === -1) return "";
-      const sameLine = lines[index].replace(new RegExp(label, "i"), "").trim();
-      if (sameLine) return sameLine;
-      return lines[index + 1] || "";
-    };
-    result.fechaSolicitud = valueAfter("Fecha de solicitud");
-    result.compromisoRespuesta = valueAfter("Compromiso de respuesta");
-
-    const knownStages = ["Registro", "Captura", "Dictamen", "Respuesta"];
-    result.etapas = knownStages.filter((stage) => body.includes(stage));
-    result.etapaActual = result.etapas[result.etapas.length - 1] || "";
-    return result;
-  }, { fallbackFolio }).catch(() => ({
-    siniestro: "",
-    fechaSiniestro: "",
-    estadoPago: "",
-    tipoTramite: "",
-    folio: fallbackFolio,
-    fechaSolicitud: "",
-    compromisoRespuesta: "",
-    etapaActual: "",
-    etapas: [],
-    ramo: "",
-    asegurado: "",
-    poliza: "",
-    tipoSiniestro: "",
-    fechaRegistro: "",
-    detalleUrl: "",
-    rawText: "",
-  }));
+    return Array.from(document.querySelectorAll("#cards-container .box-shadow-siniestros, [id$='container-salud'] .box-shadow-siniestros, .box-shadow-siniestros"))
+      .map((card) => clean(card.textContent).slice(0, 300))
+      .filter(Boolean)
+      .join("|");
+  }).catch(() => "");
 }
 
-async function screenshotAxaSiniestroResult(page, folio) {
-  const cleanFolio = normalizeText(folio).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 60) || "axa";
-  const file = path.join(CONFIG.screenshotsDir, `${Date.now()}-axa-siniestro-${cleanFolio}.png`);
-  await page.screenshot({ path: file, fullPage: true });
-  cleanupOldScreenshots();
-  return path.basename(file);
+async function clickAxaSiniestrosPageButton(page, selector) {
+  const button = page.locator(selector).first();
+  if (!(await button.count().catch(() => 0))) return false;
+  const disabled = await button.evaluate((node) => {
+    const className = String(node.className || "");
+    return Boolean(node.disabled) || node.getAttribute("aria-disabled") === "true" || /\bdisabled\b/i.test(className);
+  }).catch(() => false);
+  if (disabled) return false;
+
+  const previousSignature = await getAxaSiniestrosPageSignature(page);
+  await button.scrollIntoViewIfNeeded({ timeout: 4000 }).catch(() => {});
+  const clicked = await button.click({ timeout: 4000 }).then(() => true).catch(() => false);
+  if (!clicked) return false;
+  await page.waitForFunction((previous) => {
+    const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+    const current = Array.from(document.querySelectorAll("#cards-container .box-shadow-siniestros, [id$='container-salud'] .box-shadow-siniestros, .box-shadow-siniestros"))
+      .map((card) => clean(card.textContent).slice(0, 300))
+      .filter(Boolean)
+      .join("|");
+    return current && current !== previous;
+  }, previousSignature, { timeout: CONFIG.axaPageChangeTimeoutMs }).catch(() => {});
+  await page.waitForTimeout(500);
+  return (await getAxaSiniestrosPageSignature(page)) !== previousSignature;
 }
 
-async function searchAxaSiniestroFolio(page, folio, ramo = "Autos") {
+async function extractAxaSiniestrosVisibleRows(page) {
   page = await gotoAxaSiniestros(page);
   assertNotCancelled();
 
-  const selectedRamo = await selectAxaSiniestrosRamo(page, ramo);
-  await fillAxaSiniestroFolio(page, folio);
-  const button = await waitForAxaConsultButton(page);
-  const beforeUrl = page.url();
-  await Promise.all([
-    page.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {}),
-    clickLocator(button),
-  ]);
-  await page.waitForTimeout(1200);
-  await page.waitForFunction((target) => {
-    const text = String(document.body?.innerText || "");
-    return text.includes(target) || /No se encontraron resultados/i.test(text);
-  }, folio, { timeout: 10000 }).catch(() => {});
-
-  const validation = await readAxaSiniestrosValidation(page);
-  const bodyText = normalizeText(await page.locator("body").innerText({ timeout: 2500 }).catch(() => "")).slice(0, 500);
-  const currentUrl = page.url();
-  const changedUrl = currentUrl !== beforeUrl;
-  const hasCards = await page.locator(".box-shadow-siniestros, #cards-container .box-shadow-siniestros").first().isVisible({ timeout: 1000 }).catch(() => false);
-  const hasResult = hasCards || /consulta de siniestros|siniestro:|fecha del siniestro|compromiso de respuesta/i.test(bodyText);
-  const hasConsulted = changedUrl || /consulta|siniestro|folio|reclamaci/i.test(bodyText);
-  const details = hasResult ? await extractAxaSiniestroInfo(page, folio) : null;
-  if (details) {
-    details.ramo = details.ramo || selectedRamo.label;
+  for (let step = 0; step < CONFIG.axaMaxPages; step += 1) {
+    if (!(await clickAxaSiniestrosPageButton(page, "#pagination-siniestros #previus, #previus"))) break;
   }
-  const screenshotId = hasResult ? await screenshotAxaSiniestroResult(page, folio).catch(() => "") : "";
 
-  return {
-    page,
-    outcome: {
-      status: validation ? "validation" : hasResult ? "result" : "consulted",
-      ok: !validation && (hasResult || hasConsulted),
-      message: validation || (hasResult ? "Resultado AXA extraido." : "Consulta AXA ejecutada."),
-      url: sanitizeUrlForClient(currentUrl),
-      details,
-      screenshotId,
-    },
-  };
+  const rows = [];
+  const seen = new Set();
+  for (let pageIndex = 0; pageIndex < CONFIG.axaMaxPages; pageIndex += 1) {
+    assertNotCancelled();
+    const pageRows = await readAxaSiniestrosCurrentRows(page);
+    for (const row of pageRows) {
+      const key = normalizeText(row.siniestro || row.folio);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      rows.push(row);
+    }
+    pushLog("axa_siniestros", "Pagina de siniestros AXA capturada.", {
+      page: pageIndex + 1,
+      rows: pageRows.length,
+      total: rows.length,
+    });
+    if (!(await clickAxaSiniestrosPageButton(page, "#pagination-siniestros #next, #next"))) break;
+  }
+  return rows;
 }
 
-async function runAxaSiniestros(folios, source = "manual", ramo = "Autos") {
+async function runAxaSiniestrosVisible(source = "vista") {
   if (runtime.busy) {
     return false;
   }
-
-  const queue = [...new Set((Array.isArray(folios) ? folios : [])
-    .map((folio) => normalizeText(folio))
-    .filter(Boolean))].slice(0, 100);
-  if (!queue.length) {
-    throw new Error("Captura al menos un folio AXA para consultar.");
-  }
-  const selectedRamo = normalizeAxaSiniestrosRamo(ramo);
 
   runtime.busy = true;
   runtime.error = null;
@@ -7131,18 +7117,16 @@ async function runAxaSiniestros(folios, source = "manual", ramo = "Autos") {
     source,
     startedAt: nowIso(),
     endedAt: null,
-    total: queue.length,
+    total: 0,
     completed: 0,
     current: null,
     results: [],
     error: null,
     url: CONFIG.axaSiniestrosUrl,
-    ramo: selectedRamo.label,
+    mode: "vista",
   };
-  setState("siniestros", "Preparando consulta de Siniestros AXA...");
-  pushLog("axa_siniestros", `Inicio de consulta AXA de ${queue.length} folio(s) (${source}).`, {
-    ramo: selectedRamo.label,
-  });
+  setState("siniestros", "Leyendo vista de Siniestros AXA...");
+  pushLog("axa_siniestros", "Inicio de lectura de la vista AXA.");
 
   let preservedPage = null;
   let axaPage = null;
@@ -7155,34 +7139,24 @@ async function runAxaSiniestros(folios, source = "manual", ramo = "Autos") {
     activeAxaSiniestrosPage = axaPage;
     runtime.page = axaPage;
 
-    for (const folio of queue) {
-      assertNotCancelled();
-      runtime.axaSiniestros.current = folio;
-      setState("siniestros", `Consultando folio AXA ${folio} (${selectedRamo.label})...`);
-      try {
-        const searched = await searchAxaSiniestroFolio(axaPage, folio, selectedRamo.label);
-        axaPage = searched.page;
-        runtime.axaSiniestros.results.unshift({
-          folio,
-          ...searched.outcome,
-          at: nowIso(),
-        });
-        pushLog("axa_siniestros", searched.outcome.ok ? "Consulta AXA ejecutada." : "Consulta AXA con validacion.", {
-          folio,
-          status: searched.outcome.status,
-          message: searched.outcome.message,
-        });
-      } catch (error) {
-        const detail = serializeError(error);
-        runtime.axaSiniestros.results.unshift({ folio, ok: false, status: "error", message: detail, at: nowIso() });
-        pushLog("axa_siniestros", "Fallo la consulta AXA.", { folio, error: detail });
-      } finally {
-        runtime.axaSiniestros.completed += 1;
-      }
-    }
+    const rows = await extractAxaSiniestrosVisibleRows(axaPage);
+    runtime.axaSiniestros.total = rows.length;
+    runtime.axaSiniestros.completed = rows.length;
+    runtime.axaSiniestros.results = rows.map((details) => ({
+      siniestro: details.siniestro,
+      ok: true,
+      status: "result",
+      message: "Siniestro AXA extraido de la vista.",
+      url: sanitizeUrlForClient(details.detalleUrl || axaPage.url()),
+      details,
+      screenshotId: "",
+      at: nowIso(),
+    }));
 
-    const failed = runtime.axaSiniestros.results.filter((result) => !result.ok).length;
-    setState("done", failed ? `Siniestros AXA finalizo con ${failed} error(es).` : "Consulta de Siniestros AXA completada.");
+    setState("done", rows.length
+      ? `Vista AXA leida: ${rows.length} siniestro(s).`
+      : "Vista AXA leida sin siniestros visibles.");
+    pushLog("axa_siniestros", "Lectura de vista AXA completada.", { count: rows.length });
     return true;
   } catch (error) {
     const detail = serializeError(error);
@@ -7552,7 +7526,7 @@ async function isAxaPaginatorButtonDisabled(page, selector) {
   ).catch(() => true);
 }
 
-async function waitForAxaListadoPageChange(page, previousSignature, timeout = 10000) {
+async function waitForAxaListadoPageChange(page, previousSignature, timeout = CONFIG.axaPageChangeTimeoutMs) {
   await page.waitForFunction((previous) => {
     const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
     const label = clean(document.querySelector("mat-paginator .mat-paginator-range-label")?.textContent || "");
@@ -7568,7 +7542,7 @@ async function waitForAxaListadoPageChange(page, previousSignature, timeout = 10
       .join("|");
     return `${label}::${folios}` !== previous;
   }, previousSignature, { timeout }).catch(() => {});
-  await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
+  await page.waitForLoadState("networkidle", { timeout: CONFIG.axaNetworkIdleTimeoutMs }).catch(() => {});
   await page.waitForTimeout(500);
 }
 
@@ -7594,14 +7568,14 @@ async function goToFirstAxaListadoPage(page) {
   }
 
   const previousSelector = "mat-paginator .mat-paginator-navigation-previous";
-  for (let step = 0; step < 30; step += 1) {
+  for (let step = 0; step < CONFIG.axaMaxPages; step += 1) {
     if (!(await clickAxaPaginatorButton(page, previousSelector))) break;
   }
 }
 
 async function readAxaCurrentListadoRows(page) {
   await page.waitForFunction(() => /Nombre del contratante|Folio\s*:/i.test(document.body?.innerText || ""), null, {
-    timeout: 10000,
+    timeout: CONFIG.axaReadyTimeoutMs,
   }).catch(() => {});
   const domRows = await page.evaluate(() => {
     const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
@@ -7637,7 +7611,7 @@ async function readAxaCurrentListadoRows(page) {
       .filter((row) => row.folio && row.contratante);
   }).catch(() => []);
 
-  const bodyText = await page.locator("body").innerText({ timeout: 15000 }).catch(() => "");
+  const bodyText = await page.locator("body").innerText({ timeout: CONFIG.axaReadyTimeoutMs }).catch(() => "");
   const textRows = parseAxaListadoText(bodyText);
   const merged = [];
   const seen = new Set();
@@ -7653,8 +7627,8 @@ async function readAxaCurrentListadoRows(page) {
 async function ensureAxaListadoSession(page) {
   setState("querying", "Abriendo portal AXA...");
   await preparePageForUse(page);
-  await page.goto(CONFIG.axaUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
-  await page.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
+  await page.goto(CONFIG.axaUrl, { waitUntil: "domcontentloaded", timeout: CONFIG.axaNavigationTimeoutMs });
+  await page.waitForLoadState("networkidle", { timeout: CONFIG.axaNetworkIdleTimeoutMs }).catch(() => {});
   await page.waitForTimeout(800);
 
   const preparedLogin = await prepareAxaLoginIfVisible(page);
@@ -7670,12 +7644,12 @@ async function ensureAxaListadoSession(page) {
     if (preparedLogin.captchaDetected) {
       throw new Error("AXA requiere captcha o validacion manual.");
     }
-    await page.goto(CONFIG.axaUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
-    await page.waitForLoadState("networkidle", { timeout: 12000 }).catch(() => {});
+    await page.goto(CONFIG.axaUrl, { waitUntil: "domcontentloaded", timeout: CONFIG.axaNavigationTimeoutMs });
+    await page.waitForLoadState("networkidle", { timeout: CONFIG.axaNetworkIdleTimeoutMs }).catch(() => {});
     await page.waitForTimeout(1000);
   }
 
-  const bodyText = await page.locator("body").innerText({ timeout: 15000 }).catch(() => "");
+  const bodyText = await page.locator("body").innerText({ timeout: CONFIG.axaReadyTimeoutMs }).catch(() => "");
   if (/usuario:\s*|contrase/i.test(bodyText) && !/historial/i.test(bodyText)) {
     throw new Error("AXA no confirmo el inicio de sesion.");
   }
@@ -7688,7 +7662,7 @@ async function extractAxaListadoRows(page) {
   const allRows = [];
   const seenFolios = new Set();
   await goToFirstAxaListadoPage(page);
-  for (let pageIndex = 0; pageIndex < 30; pageIndex += 1) {
+  for (let pageIndex = 0; pageIndex < CONFIG.axaMaxPages; pageIndex += 1) {
     await scrollAxaListado(page);
     const range = await getAxaListadoRangeLabel(page);
     const rows = await readAxaCurrentListadoRows(page);
@@ -7719,7 +7693,7 @@ async function extractAxaListadoRows(page) {
   if (allRows.length) {
     return allRows;
   }
-  const bodyText = await page.locator("body").innerText({ timeout: 15000 }).catch(() => "");
+  const bodyText = await page.locator("body").innerText({ timeout: CONFIG.axaReadyTimeoutMs }).catch(() => "");
   return parseAxaListadoText(bodyText);
 }
 
@@ -8496,45 +8470,13 @@ app.get("/api/axa/siniestros/status", requireMonitorToken, requireRole("admin", 
 });
 
 app.post("/api/axa/siniestros/search", requireMonitorToken, requireRole("admin", "executive"), (req, res) => {
-  const folios = Array.isArray(req.body?.folios) ? req.body.folios : [req.body?.folio];
-  const queue = [...new Set(folios.map((folio) => normalizeText(folio)).filter(Boolean))].slice(0, 100);
-  const ramo = req.body?.ramo || req.body?.lineaNegocio || "Autos";
-  if (!queue.length) {
-    res.status(400).json({ ok: false, message: "Captura un folio AXA para consultar." });
-    return;
-  }
   if (runtime.busy) {
     res.status(409).json({ ok: false, busy: true, message: "Ya hay una ejecucion en curso." });
     return;
   }
 
-  void runAxaSiniestros(queue, "manual", ramo);
-  res.json({ ok: true, accepted: queue.length, axaSiniestros: runtime.axaSiniestros });
-});
-
-app.post("/api/axa/siniestros/import-excel", requireMonitorToken, requireRole("admin", "executive"), (req, res) => {
-  if (!Buffer.isBuffer(req.body) || !req.body.length) {
-    res.status(400).json({ ok: false, message: "Archivo Excel vacio o no recibido." });
-    return;
-  }
-  if (runtime.busy) {
-    res.status(409).json({ ok: false, busy: true, message: "Ya hay una ejecucion en curso." });
-    return;
-  }
-
-  const folios = parseSiniestrosExcel(req.body);
-  if (!folios.length) {
-    res.status(400).json({
-      ok: false,
-      message: "No encontre folios. Usa una columna llamada Folio o coloca los folios en la primera columna.",
-    });
-    return;
-  }
-
-  const queue = folios.slice(0, 100);
-  const ramo = req.query?.ramo || "Autos";
-  void runAxaSiniestros(queue, "excel", ramo);
-  res.json({ ok: true, accepted: queue.length, axaSiniestros: runtime.axaSiniestros });
+  void runAxaSiniestrosVisible("vista");
+  res.json({ ok: true, mode: "vista", axaSiniestros: runtime.axaSiniestros });
 });
 
 app.get("/api/health", (_req, res) => {
@@ -9115,6 +9057,7 @@ module.exports = {
   app,
   buildGetPendientesUrl,
   compareRows,
+  extractAxaSiniestrosRowsFromDocument,
   createEmptyDiff,
   extractItems,
   getCurrentMonthDateRange,
@@ -9126,6 +9069,7 @@ module.exports = {
   mergeCurrentMonthWithOpenOlderRows,
   normalizeText,
   parseAxaListadoText,
+  parseAxaSiniestrosListadoText,
   parseSiniestrosExcel,
   parseDateForSort,
   publicSessionInfo,

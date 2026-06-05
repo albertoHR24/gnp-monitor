@@ -417,7 +417,7 @@
           <select id="bitRamo" required>
             <option value="">Selecciona un ramo</option>
             <option value="Autos">Autos</option>
-            <option value="Daño">Daño</option>
+            <option value="Daños">Daños</option>
             <option value="GMM">GMM (Gastos Médicos)</option>
             <option value="Vida">Vida</option>
           </select>
@@ -432,7 +432,11 @@
         </div>
         <div class="form-field">
           <label for="bitAseguradora">Aseguradora</label>
-          <input id="bitAseguradora" type="text" placeholder="Nombre aseguradora" />
+          <select id="bitAseguradora">
+            <option value="">Selecciona aseguradora</option>
+            <option value="GNP">GNP</option>
+            <option value="AXA">AXA</option>
+          </select>
         </div>
         <div class="form-actions">
           <button id="bitCancelEdit" class="btn-ghost hidden" type="button">Cancelar</button>
@@ -711,7 +715,7 @@
           <select id="sinRamo" required>
             <option value="">Selecciona un ramo</option>
             <option value="Autos">Autos</option>
-            <option value="Daño">Daño</option>
+            <option value="Daños">Daños</option>
             <option value="GMM" selected>GMM (Gastos Médicos)</option>
             <option value="Vida">Vida</option>
           </select>
@@ -770,33 +774,14 @@
           </div>
         </div>
         <div class="panel-actions">
-          <label class="btn-secondary">
-            Cargar Excel de folios
-            <input id="axaSinExcelInput" type="file" accept=".xlsx,.xls" hidden />
-          </label>
-          <button id="axaSinRunBtn" class="btn-primary" type="submit" form="axaSiniestrosForm">Consultar en AXA</button>
+          <button id="axaSinRunBtn" class="btn-primary" type="button">Consultar en AXA</button>
         </div>
       </div>
-
-      <form id="axaSiniestrosForm" class="form-grid siniestros-form">
-        <div class="form-field">
-          <label for="axaSinRamo">Ramo AXA</label>
-          <select id="axaSinRamo" class="select-input">
-            <option value="Autos">Autos</option>
-            <option value="Danos">Da&ntilde;os</option>
-            <option value="Salud">Salud</option>
-          </select>
-        </div>
-        <div class="form-field span-2">
-          <label for="axaSinFolios">Folios AXA</label>
-          <textarea id="axaSinFolios" rows="4" placeholder="Ej. 17181465&#10;17181466&#10;17181467" required></textarea>
-        </div>
-      </form>
 
       <div id="axaSiniestrosNotice" class="bitacora-notice hidden" role="status" aria-live="polite"></div>
 
       <div class="summary-cards siniestros-summary">
-        <div class="summary-card"><strong id="axaSinTotal">0</strong><span>Solicitados</span></div>
+        <div class="summary-card"><strong id="axaSinTotal">0</strong><span>Detectados</span></div>
         <div class="summary-card info"><strong id="axaSinCompleted">0</strong><span>Procesados</span></div>
         <div class="summary-card success"><strong id="axaSinSuccess">0</strong><span>Consultados</span></div>
         <div class="summary-card danger"><strong id="axaSinFailed">0</strong><span>Errores</span></div>
@@ -806,7 +791,7 @@
         <table class="data-table siniestros-table">
           <thead>
             <tr>
-              <th>Folio AXA</th>
+              <th>Siniestro AXA</th>
               <th>Resultado</th>
               <th>Detalle</th>
               <th>Siniestro</th>

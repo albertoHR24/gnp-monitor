@@ -13,6 +13,7 @@ const {
   isLocalHost,
   mergeCurrentMonthWithOpenOlderRows,
   parseAxaListadoText,
+  parseAxaSiniestrosListadoText,
   parseSiniestrosExcel,
   parseDateForSort,
   publicSessionInfo,
@@ -250,10 +251,10 @@ assert.strictEqual(bitacoraEntry.fechaEntradaCorreo, "03/06/2026", "sanitizeBita
 assert.strictEqual(bitacoraEntry.fechaSalida, "04/06/2026", "sanitizeBitacoraEntry should keep fecha salida");
 
 assert.strictEqual(sanitizeBitacoraEntry({ folio: "1", ramo: "Autos" }).ramo, "Autos");
-assert.strictEqual(sanitizeBitacoraEntry({ folio: "1", ramo: "Daño" }).ramo, "Daño");
+assert.strictEqual(sanitizeBitacoraEntry({ folio: "1", ramo: "Daño" }).ramo, "Daños");
 assert.strictEqual(sanitizeBitacoraEntry({ folio: "1", ramo: "GMM (Gastos Médicos)" }).ramo, "GMM");
 assert.strictEqual(sanitizeBitacoraEntry({ folio: "1", ramo: "Vida" }).ramo, "Vida");
-assert.strictEqual(sanitizeBitacoraEntry({ folio: "1", ramo: "Da\u00c3\u00b1o" }).ramo, "Daño");
+assert.strictEqual(sanitizeBitacoraEntry({ folio: "1", ramo: "Da\u00c3\u00b1o" }).ramo, "Daños");
 assert.strictEqual(sanitizeBitacoraEntry({ folio: "1", ramo: "GMM (Gastos M\u00c3\u00a9dicos)" }).ramo, "GMM");
 assert.strictEqual(
   sanitizeBitacoraEntry({ folio: "1", ot_interna: " OT-260603-00002 ", ramo: "GMM" }).otInterna,
@@ -314,12 +315,34 @@ assert.strictEqual(axaRowsWithChrome.length, 1, "parseAxaListadoText should igno
 assert.strictEqual(axaRowsWithChrome[0].folio, "93817266", "parseAxaListadoText should keep the valid last folio");
 assert.strictEqual(axaRowsWithChrome[0].numeroSolicitudes, "1", "parseAxaListadoText should trim footer from request count");
 
+const axaSiniestrosRows = parseAxaSiniestrosListadoText(`
+Consulta de siniestros
+D2592125
+Abierto
+Asegurado
+WILLIAM KISEL LAITER
+No.de P\u00f3liza
+SDA333240000
+Tipo de siniestro
+Da\u00f1os a terceros en cualquiera de sus bienes y personas
+Fecha del registro
+2025-12-04
+Ver detalle
+`);
+assert.strictEqual(axaSiniestrosRows.length, 1, "parseAxaSiniestrosListadoText should extract visible AXA claim rows");
+assert.strictEqual(axaSiniestrosRows[0].siniestro, "D2592125", "parseAxaSiniestrosListadoText should read claim number");
+assert.strictEqual(axaSiniestrosRows[0].estadoPago, "Abierto", "parseAxaSiniestrosListadoText should read status");
+assert.strictEqual(axaSiniestrosRows[0].asegurado, "WILLIAM KISEL LAITER", "parseAxaSiniestrosListadoText should read insured");
+assert.strictEqual(axaSiniestrosRows[0].poliza, "SDA333240000", "parseAxaSiniestrosListadoText should read policy");
+assert.strictEqual(axaSiniestrosRows[0].ramo, "Daños", "parseAxaSiniestrosListadoText should normalize damage claim branch");
+assert.strictEqual(axaSiniestrosRows[0].fechaRegistro, "2025-12-04", "parseAxaSiniestrosListadoText should read registry date");
+
 const bitacoraWithoutRamo = sanitizeBitacoraEntry({
   folio: "26Y28G3374",
   tramite: "Movimiento",
   descripcion: "Seguimiento sin ramo explicito",
 });
-assert.strictEqual(bitacoraWithoutRamo.ramo, "", "sanitizeBitacoraEntry should not invent Daño as default ramo");
+assert.strictEqual(bitacoraWithoutRamo.ramo, "", "sanitizeBitacoraEntry should not invent Daños as default ramo");
 assert.strictEqual(Boolean(bitacoraWithoutRamo.otInterna), true, "sanitizeBitacoraEntry should still generate OT interna");
 
 // Test de isTerminada (critical for filtering)

@@ -1287,6 +1287,13 @@ function resolveRamoInputValue(value) {
   return value;
 }
 
+function resolveAseguradoraInputValue(value) {
+  const normalized = normalizeText(fixMojibakeText(value));
+  if (normalized.includes("gnp")) return "GNP";
+  if (normalized.includes("axa")) return "AXA";
+  return "";
+}
+
 function fixMojibakeText(value) {
   return String(value || "")
     .replace(/ÃƒÂ±|Ã±/g, "ñ")
@@ -1440,7 +1447,7 @@ function fillBitacoraForm(entry) {
   document.getElementById("bitRamo").value = resolveRamoInputValue(entry.ramo);
   document.getElementById("bitDescripcion").value = entry.descripcion || "";
   document.getElementById("bitComentarios").value = entry.comentarios || "";
-  document.getElementById("bitAseguradora").value = entry.aseguradora || "";
+  document.getElementById("bitAseguradora").value = resolveAseguradoraInputValue(entry.aseguradora);
   document.getElementById("bitCancelEdit").classList.remove("hidden");
   document.getElementById("bitFolio").focus();
 }
@@ -2237,7 +2244,7 @@ function renderAxaSiniestros(data = axaSiniestrosData) {
     const cell = document.createElement("td");
     cell.colSpan = 7;
     cell.className = "muted";
-    cell.textContent = "Aun no hay consultas AXA solicitadas.";
+    cell.textContent = "Aun no hay lecturas AXA solicitadas.";
     row.appendChild(cell);
     body.appendChild(row);
     return;
@@ -2245,7 +2252,7 @@ function renderAxaSiniestros(data = axaSiniestrosData) {
 
   results.forEach((result) => {
     const row = document.createElement("tr");
-    appendCell(row, result.folio, { strong: true });
+    appendCell(row, result.details?.siniestro || result.siniestro || "-", { strong: true });
     const status = appendCell(row, result.ok ? "Consultado" : "Error");
     status.className = result.ok ? "result-ok" : "result-error";
     appendCell(row, result.message);
@@ -2275,7 +2282,7 @@ async function openAxaSiniestrosResult(result) {
   const body = document.getElementById("axaSiniestrosModalBody");
   if (!modal || !title || !subtitle || !body) return;
 
-  title.textContent = `Folio AXA ${displayValue(result.folio)}`;
+  title.textContent = `Siniestro AXA ${displayValue(result.details?.siniestro || result.siniestro)}`;
   subtitle.textContent = result.message || "Resultado de Consulta Express";
   clearElement(body);
 
@@ -2292,7 +2299,6 @@ async function openAxaSiniestrosResult(result) {
     ["Fecha del siniestro", details.fechaSiniestro],
     ["Estado", details.estadoPago],
     ["Tramite", details.tipoTramite],
-    ["Folio respuesta", details.folio],
     ["Fecha solicitud", details.fechaSolicitud],
     ["Compromiso respuesta", details.compromisoRespuesta],
     ["Etapa actual", details.etapaActual],
@@ -2331,7 +2337,7 @@ async function openAxaSiniestrosResult(result) {
       clearElement(imageWrap);
       const image = document.createElement("img");
       image.src = url;
-      image.alt = `Captura AXA ${result.folio}`;
+      image.alt = `Captura AXA ${result.details?.siniestro || result.siniestro || ""}`;
       image.onload = () => setTimeout(() => URL.revokeObjectURL(url), 60000);
       imageWrap.appendChild(image);
     } catch (error) {
@@ -2346,56 +2352,21 @@ function closeAxaSiniestrosResult() {
   document.getElementById("axaSiniestrosModal")?.classList.add("hidden");
 }
 
-function parseFoliosInput(value) {
-  return String(value || "")
-    .split(/[\s,;]+/)
-    .map((folio) => folio.trim())
-    .filter(Boolean)
-    .filter((folio, index, all) => all.indexOf(folio) === index);
-}
-
 async function searchAxaSiniestro(event) {
-  event.preventDefault();
-  const field = document.getElementById("axaSinFolios");
-  const ramo = document.getElementById("axaSinRamo")?.value || "Autos";
-  const folios = parseFoliosInput(field?.value);
-  if (!folios.length) return;
+  event?.preventDefault();
 
   try {
     const result = await apiJson("/api/axa/siniestros/search", {
       method: "POST",
-      body: JSON.stringify({ folios, ramo }),
+      body: JSON.stringify({}),
     });
     if (result.axaSiniestros) {
       renderAxaSiniestros(result.axaSiniestros);
     }
-    showAxaSiniestrosNotice(`Consulta AXA iniciada para ${result.accepted || 1} folio(s).`);
-    if (field) field.value = "";
+    showAxaSiniestrosNotice("Lectura de vista AXA iniciada.");
     await fetchStatus();
   } catch (error) {
     showAxaSiniestrosNotice(`No se inicio AXA: ${error.message}`, "error");
-  }
-}
-
-async function importAxaSiniestrosExcel(event) {
-  const file = event.target.files && event.target.files[0];
-  const ramo = document.getElementById("axaSinRamo")?.value || "Autos";
-  event.target.value = "";
-  if (!file) return;
-  try {
-    const buffer = await file.arrayBuffer();
-    const result = await apiJson(`/api/axa/siniestros/import-excel?ramo=${encodeURIComponent(ramo)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/octet-stream" },
-      body: buffer,
-    });
-    if (result.axaSiniestros) {
-      renderAxaSiniestros(result.axaSiniestros);
-    }
-    showAxaSiniestrosNotice(`Excel AXA recibido. Se consultaran ${result.accepted} folio(s).`);
-    await fetchStatus();
-  } catch (error) {
-    showAxaSiniestrosNotice(`No se proceso el Excel AXA: ${error.message}`, "error");
   }
 }
 
@@ -3701,13 +3672,12 @@ document.getElementById("bitExcelInput").addEventListener("change", importBitaco
 document.getElementById("bitExcelLink").addEventListener("click", openBitacoraExcel);
 document.getElementById("bitMaximizeBtn").addEventListener("click", toggleBitacoraMaximized);
 document.getElementById("siniestrosForm").addEventListener("submit", searchSiniestro);
-document.getElementById("axaSiniestrosForm")?.addEventListener("submit", searchAxaSiniestro);
+document.getElementById("axaSinRunBtn")?.addEventListener("click", searchAxaSiniestro);
 document.getElementById("axaSiniestrosModalClose")?.addEventListener("click", closeAxaSiniestrosResult);
 document.getElementById("axaSiniestrosModal")?.addEventListener("click", (event) => {
   if (event.target?.id === "axaSiniestrosModal") closeAxaSiniestrosResult();
 });
 document.getElementById("sinExcelInput").addEventListener("change", importSiniestrosExcel);
-document.getElementById("axaSinExcelInput")?.addEventListener("change", importAxaSiniestrosExcel);
 document.getElementById("operatorModeBtn").addEventListener("click", () => setUiMode("operator"));
 document.getElementById("tvModeBtn").addEventListener("click", () => setUiMode("tv"));
 document.getElementById("gnpCarrierBtn").addEventListener("click", () => setCarrier("gnp"));
