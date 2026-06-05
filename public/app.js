@@ -38,6 +38,8 @@ let axaSiniestrosData = { total: 0, completed: 0, results: [], busy: false };
 let axaState = { data: [], diff: null, summary: {}, busy: false, configured: false };
 let axaRows = [];
 let axaFilteredRows = [];
+let axaCurrentPage = 1;
+const axaRowsPerPage = 10;
 let axaQuickFilter = "all";
 let diffData = null;
 let expandedBitacoraId = null;
@@ -58,7 +60,6 @@ let carouselTimer = null;
 let statusPollTimer = null;
 let autoScrollTimer = null;
 let lastAlertSignature = "";
-let postTokenRequired = false;
 let currentUser = null;
 let adminMetricsState = { metrics: [], cases: [], users: [] };
 let selectedAdminUserId = "";
@@ -252,6 +253,31 @@ function carrierView(module) {
     return activeCarrier === "axa" ? "axa-siniestros" : "siniestros";
   }
   return activeCarrier === "axa" ? "axa" : "monitor";
+}
+
+function clearAutofilledSearchInputsForUser() {
+  const userTokens = [
+    currentUser?.username,
+    currentUser?.displayName,
+  ]
+    .map((value) => normalizeText(value).trim())
+    .filter(Boolean);
+  if (!userTokens.length) return;
+
+  ["searchInput", "bitSearch", "axaSearchInput"].forEach((id) => {
+    const input = document.getElementById(id);
+    if (!input || input.dataset.autofillChecked === "1" || input.dataset.userEdited === "1") return;
+    const value = normalizeText(input.value).trim();
+    if (!value || document.activeElement === input) return;
+    input.dataset.autofillChecked = "1";
+    const looksLikeUserAutofill = userTokens.some((token) =>
+      token === value || token.startsWith(value) || value.startsWith(token)
+    );
+    if (looksLikeUserAutofill) {
+      input.value = "";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  });
 }
 
 function setCarrier(carrier) {
@@ -608,7 +634,8 @@ function renderAxa(data = axaState) {
 
   setText("axaClock", formatClock(new Date().toISOString()));
   setText("axaLastUpdate", fmtDate(axaState.lastUpdate));
-  setText("axaNextUpdate", axaState.configured ? "Pendiente" : "Desactivada");
+  setText("axaNextUpdate", axaState.configured ? "Manual" : "Desactivada");
+  updateAxaRefreshCountdown();
   setText("axaSessionStatus", axaState.configured ? "Configurada" : "No configurada");
   setText("axaRecordCount", axaRows.length);
   setText("axaTotal", summary.totalActual ?? axaRows.length);
@@ -617,8 +644,8 @@ function renderAxa(data = axaState) {
   setText("axaDeletedCount", summary.eliminados ?? 0);
   setText("axaDueCount", operational.due);
   setText("axaTodayCount", operational.today);
-  setText("axaStateMessage", axaState.message || "Vista lista");
-  setText("axaStateSecondary", axaState.error || (axaState.configured ? "Conectada" : "Pendiente de flujo AXA"));
+  setText("axaStateMessage", axaState.message || "Portal AXA listo para consultar.");
+  setText("axaStateSecondary", axaState.error || (axaState.configured ? "Usa Actualizar AXA para leer el historial." : "Configura AXA_URL."));
   setText("axaQuickAllCount", operational.all);
   setText("axaQuickDueCount", operational.due);
   setText("axaQuickTodayCount", operational.today);
@@ -643,14 +670,39 @@ function renderAxa(data = axaState) {
   applyAxaFilters();
 }
 
+function formatRefreshCountdown(nextTrigger) {
+  const next = nextTrigger ? new Date(nextTrigger) : null;
+  if (!next || Number.isNaN(next.getTime())) return "";
+  const remaining = Math.max(0, Math.ceil((next.getTime() - Date.now()) / 1000));
+  const minutes = Math.floor(remaining / 60);
+  const seconds = String(remaining % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function updateAxaRefreshCountdown() {
+  const axaClock = document.getElementById("axaClock");
+  if (axaClock) axaClock.textContent = formatClock();
+
+  const countdown = document.getElementById("axaRefreshCountdown");
+  if (!countdown) return;
+  const scheduler = lastStatusData?.scheduler;
+  if (!scheduler?.enabled || scheduler.paused || !scheduler.nextTrigger) {
+    countdown.textContent = "Refresco automatico desactivado";
+    return;
+  }
+  const remaining = formatRefreshCountdown(scheduler.nextTrigger);
+  countdown.textContent = remaining ? `Refresca en ${remaining}` : "Refresco automatico desactivado";
+}
+
 function applyAxaFilters() {
   const search = normalizeText(document.getElementById("axaSearchInput")?.value || "").trim();
   const status = normalizeText(document.getElementById("axaStatusFilter")?.value || "");
+  axaCurrentPage = 1;
   axaFilteredRows = sortForTv(axaRows.filter((row) => {
     if (!matchesAxaQuickFilter(row)) return false;
     if (status && !normalizeText(row.estatus).includes(status)) return false;
     if (search) {
-      const searchable = [row.ot, row.poliza, row.contratante, row.agente, row.tipoSolicitud, row.producto].join(" ");
+      const searchable = [row.ot, row.poliza, row.contratante, row.tipoSolicitud, row.producto, row.numeroSolicitudes].join(" ");
       if (!normalizeText(searchable).includes(search)) return false;
     }
     return true;
@@ -659,39 +711,165 @@ function applyAxaFilters() {
 }
 
 function renderAxaTable() {
-  const tbody = document.getElementById("axaTbody");
+  const list = document.getElementById("axaTbody");
   const panel = document.querySelector(".axa-table-panel");
   const empty = document.getElementById("axaEmptyState");
-  if (!tbody) return;
-  tbody.innerHTML = "";
+  if (!list) return;
+  clearElement(list);
   setTextContent("axaTableCount", axaFilteredRows.length ? `${axaFilteredRows.length} registros` : `${axaRows.length} registros`);
   panel?.classList.toggle("has-data", axaFilteredRows.length > 0);
   if (empty) empty.style.display = axaFilteredRows.length ? "none" : "flex";
 
-  axaFilteredRows.forEach((row) => {
-    const tr = document.createElement("tr");
-    const due = getDueInfo(row);
-    tr.classList.add(`row-priority-${due.key}`);
-    if (diffHasRow(axaState.diff, "nuevos", row.ot)) tr.classList.add("row-new");
-    if (diffHasRow(axaState.diff, "cambiados", row.ot)) tr.classList.add("row-changed");
-    appendCell(tr, row.ot, { strong: true, className: "col-field-ot" });
-    appendCell(tr, row.usuarioCreador, { className: "col-field-usuario" });
-    appendCell(tr, row.estatus, { badgeClass: estatusBadgeClass(row.estatus), className: "col-field-estatus" });
-    appendPriorityCell(tr, row);
-    appendCell(tr, formatGnpDate(row.fechaCompromiso), { className: "col-field-compromiso" });
-    appendCell(tr, row.poliza, { className: "col-field-poliza" });
-    appendCell(tr, row.agente, { className: "col-field-agente" });
-    appendCell(tr, row.contratante, { className: "col-field-contratante" });
-    appendCell(tr, titleCase(row.tipoSolicitud), { className: "col-field-tipo" });
-    appendCell(tr, row.producto, { className: "col-field-producto" });
-    appendCell(tr, row.guia, { className: "col-field-guia" });
-    appendCell(tr, formatGnpDate(row.fechaRegistro), { className: "col-field-registro" });
-    appendCell(tr, formatGnpDate(row.primerIngreso), { className: "col-field-primer-ingreso" });
-    appendCell(tr, formatGnpDate(row.ultimoIngreso), { className: "col-field-ultimo-ingreso" });
-    appendCell(tr, row.medioApertura, { className: "col-field-medio" });
-    appendCell(tr, formatRole(row.rol), { className: "col-field-rol" });
-    tbody.appendChild(tr);
+  const totalPages = Math.max(1, Math.ceil(axaFilteredRows.length / axaRowsPerPage));
+  axaCurrentPage = Math.min(Math.max(axaCurrentPage, 1), totalPages);
+  const start = (axaCurrentPage - 1) * axaRowsPerPage;
+  const end = Math.min(start + axaRowsPerPage, axaFilteredRows.length);
+  const pageRows = axaFilteredRows.slice(start, end);
+
+  pageRows.forEach((row) => {
+    const item = document.createElement("article");
+    item.className = "axa-request-item";
+    if (diffHasRow(axaState.diff, "nuevos", row.ot)) item.classList.add("row-new");
+    if (diffHasRow(axaState.diff, "cambiados", row.ot)) item.classList.add("row-changed");
+
+    const ramo = document.createElement("div");
+    ramo.className = "axa-request-branch";
+    const icon = document.createElement("div");
+    icon.className = "axa-request-icon";
+    icon.textContent = "AXA";
+    const label = document.createElement("span");
+    label.textContent = displayValue(row.producto || "SALUD");
+    ramo.append(icon, label);
+
+    const fields = document.createElement("div");
+    fields.className = "axa-request-fields";
+    [
+      ["Nombre del contratante", row.contratante],
+      ["Poliza", row.poliza],
+      ["Tramite", row.tipoSolicitud],
+      ["Fecha Solicitud", row.fechaRegistro],
+      ["Estatus", row.estatus],
+      ["Folio", row.ot],
+      ["Numero de Solicitudes", row.numeroSolicitudes],
+    ].forEach(([labelText, value]) => {
+      const line = document.createElement("div");
+      line.className = "axa-request-line";
+      const strong = document.createElement("strong");
+      strong.textContent = `${labelText}: `;
+      const span = document.createElement("span");
+      span.textContent = displayValue(value);
+      line.append(strong, span);
+      fields.appendChild(line);
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "axa-request-actions";
+    const bitacoraButton = document.createElement("button");
+    bitacoraButton.className = "axa-bitacora-btn";
+    bitacoraButton.type = "button";
+    bitacoraButton.textContent = "Registrar en bitacora";
+    bitacoraButton.disabled = !row.ot && !row.poliza;
+    bitacoraButton.title = "Precargar esta solicitud AXA en bitacora";
+    bitacoraButton.addEventListener("click", () => sendAxaRowToBitacora(row));
+    const button = document.createElement("button");
+    button.className = "axa-download-btn";
+    button.type = "button";
+    button.textContent = "Descargar solicitud";
+    button.disabled = !row.ot;
+    button.title = row.ot ? "Descargar solicitud AXA" : "Folio AXA no disponible";
+    if (row.ot) {
+      button.addEventListener("click", () => downloadAxaSolicitud(row.ot, button));
+    }
+    actions.append(bitacoraButton, button);
+
+    item.append(ramo, fields, actions);
+    list.appendChild(item);
   });
+  updateAxaPagination();
+}
+
+function updateAxaPagination() {
+  const pagination = document.getElementById("axaPagination");
+  const info = document.getElementById("axaPaginationInfo");
+  const indicator = document.getElementById("axaPageIndicator");
+  const previous = document.getElementById("axaPrevPage");
+  const next = document.getElementById("axaNextPage");
+  if (!pagination || !info || !indicator || !previous || !next) return;
+
+  const totalPages = Math.max(1, Math.ceil(axaFilteredRows.length / axaRowsPerPage));
+  const start = axaFilteredRows.length ? (axaCurrentPage - 1) * axaRowsPerPage + 1 : 0;
+  const end = Math.min(axaCurrentPage * axaRowsPerPage, axaFilteredRows.length);
+  pagination.classList.toggle("hidden", totalPages <= 1);
+  info.textContent = axaFilteredRows.length
+    ? `Mostrando ${start}-${end} de ${axaFilteredRows.length} registros`
+    : "Mostrando 0 registros";
+  indicator.textContent = `${axaCurrentPage} / ${totalPages}`;
+  previous.disabled = axaCurrentPage <= 1;
+  next.disabled = axaCurrentPage >= totalPages;
+}
+
+function normalizeAxaStatusForBitacora(value) {
+  const status = normalizeText(value);
+  if (status.includes("termin")) return "TERMINADA";
+  if (status.includes("rechaz") || status.includes("division")) return "RECHAZADA";
+  if (status.includes("cancel")) return "CANCELADA";
+  if (status.includes("activ")) return "ACTIVADA";
+  if (status.includes("proceso")) return "EN PROCESO";
+  return "PENDIENTE";
+}
+
+function axaRowToBitacoraEntry(row) {
+  return {
+    id: "",
+    folio: row.ot || "",
+    poliza: row.poliza || "",
+    cliente: row.contratante || "",
+    tramite: displayValue(row.tipoSolicitud) === "-" ? "" : titleCase(row.tipoSolicitud),
+    estado: normalizeAxaStatusForBitacora(row.estatus),
+    responsable: currentUser?.displayName || "",
+    fechaEntrega: normalizeDateForInput(row.fechaRegistro),
+    descripcion: ["AXA", row.producto, row.numeroSolicitudes ? `${row.numeroSolicitudes} solicitud(es)` : ""].filter(Boolean).join(" - "),
+    comentarios: row.comentarios || "",
+    aseguradora: "AXA",
+    otInterna: generateOTInterna(),
+    ramo: resolveRamoInputValue(row.producto || "SALUD"),
+  };
+}
+
+function sendAxaRowToBitacora(row) {
+  if (!row) return;
+  fillBitacoraForm(axaRowToBitacoraEntry(row));
+  setMainView("bitacora");
+  showBitacoraNotice("Solicitud AXA precargada. Revisa los datos y guarda la bitacora.");
+  document.getElementById("bitComentarios")?.focus();
+}
+
+async function downloadAxaSolicitud(folio, button) {
+  try {
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Descargando...";
+    }
+    const blob = await apiBlob(`/api/axa/solicitud/${encodeURIComponent(folio)}`);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `solicitud-axa-${folio}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    renderAxa({
+      ...axaState,
+      error: error.message || "No se pudo descargar la solicitud AXA.",
+    });
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Descargar solicitud";
+    }
+  }
 }
 
 function setTextContent(id, value) {
@@ -1058,14 +1236,7 @@ function getBitacoraPayload() {
 }
 
 function getOperatorName() {
-  let name = localStorage.getItem("gnpOperatorName") || "";
-  if (!name) {
-    name = window.prompt("Nombre del operador") || "";
-    if (name) {
-      localStorage.setItem("gnpOperatorName", name);
-    }
-  }
-  return name || "Operador local";
+  return currentUser?.displayName || currentUser?.username || "Operador local";
 }
 
 function generateOTInterna() {
@@ -1109,7 +1280,7 @@ function findRamoOptionValue(key) {
 function resolveRamoInputValue(value) {
   const normalized = normalizeText(fixMojibakeText(value));
   if (!normalized) return "";
-  if (normalized.includes("gmm") || normalized.includes("gastos medicos")) return findRamoOptionValue("gmm");
+  if (normalized.includes("gmm") || normalized.includes("gastos medicos") || normalized.includes("salud")) return findRamoOptionValue("gmm");
   if (normalized.includes("vida")) return findRamoOptionValue("vida");
   if (normalized.includes("auto")) return findRamoOptionValue("auto");
   if (normalized.includes("dan") || normalized.includes("dano") || normalized.includes("da?o")) return findRamoOptionValue("dan");
@@ -2113,6 +2284,11 @@ async function openAxaSiniestrosResult(result) {
   grid.className = "axa-result-grid";
   [
     ["Siniestro", details.siniestro],
+    ["Ramo", details.ramo],
+    ["Asegurado", details.asegurado],
+    ["Poliza", details.poliza],
+    ["Tipo de siniestro", details.tipoSiniestro],
+    ["Fecha del registro", details.fechaRegistro],
     ["Fecha del siniestro", details.fechaSiniestro],
     ["Estado", details.estadoPago],
     ["Tramite", details.tipoTramite],
@@ -2181,13 +2357,14 @@ function parseFoliosInput(value) {
 async function searchAxaSiniestro(event) {
   event.preventDefault();
   const field = document.getElementById("axaSinFolios");
+  const ramo = document.getElementById("axaSinRamo")?.value || "Autos";
   const folios = parseFoliosInput(field?.value);
   if (!folios.length) return;
 
   try {
     const result = await apiJson("/api/axa/siniestros/search", {
       method: "POST",
-      body: JSON.stringify({ folios }),
+      body: JSON.stringify({ folios, ramo }),
     });
     if (result.axaSiniestros) {
       renderAxaSiniestros(result.axaSiniestros);
@@ -2202,11 +2379,12 @@ async function searchAxaSiniestro(event) {
 
 async function importAxaSiniestrosExcel(event) {
   const file = event.target.files && event.target.files[0];
+  const ramo = document.getElementById("axaSinRamo")?.value || "Autos";
   event.target.value = "";
   if (!file) return;
   try {
     const buffer = await file.arrayBuffer();
-    const result = await apiJson("/api/axa/siniestros/import-excel", {
+    const result = await apiJson(`/api/axa/siniestros/import-excel?ramo=${encodeURIComponent(ramo)}`, {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
       body: buffer,
@@ -2469,6 +2647,7 @@ function renderTvMeta(data) {
 function updateClock() {
   const clock = document.getElementById("clockChip");
   if (clock) clock.textContent = formatClock();
+  updateAxaRefreshCountdown();
 
   const nextRunChip = document.getElementById("nextRunChip");
   if (nextRunChip && lastStatusData && lastStatusData.scheduler && lastStatusData.scheduler.enabled) {
@@ -2553,7 +2732,6 @@ function showLoading(show, mode) {
 
 function renderStatus(data) {
   lastStatusData = data;
-  postTokenRequired = Boolean(data.auth && data.auth.postTokenRequired);
   if (data.auth && data.auth.user) {
     setCurrentUser(data.auth.user);
   }
@@ -2650,6 +2828,8 @@ function renderStatus(data) {
 function setCurrentUser(user) {
   currentUser = user || null;
   document.body.classList.toggle("is-admin", currentUser?.role === "admin");
+  setTimeout(clearAutofilledSearchInputsForUser, 0);
+  setTimeout(clearAutofilledSearchInputsForUser, 250);
   const overlay = document.getElementById("loginOverlay");
   const userPill = document.getElementById("userPill");
   const userName = document.getElementById("userName");
@@ -2747,8 +2927,8 @@ async function runAxaNow() {
     if (error?.message) {
       renderAxa({
         ...axaState,
-        mode: "pending_config",
-        message: "Flujo AXA pendiente",
+        mode: "error",
+        message: "No se pudo actualizar AXA",
         error: error.message,
       });
     }
@@ -2759,28 +2939,12 @@ async function runAxaNow() {
   }
 }
 
-function getMonitorToken() {
-  return localStorage.getItem("gnpMonitorToken") || "";
-}
-
-function promptForMonitorToken() {
-  const token = window.prompt("Token local del monitor");
-  if (token) {
-    localStorage.setItem("gnpMonitorToken", token);
-  }
-  return token || "";
-}
-
 async function apiPost(path) {
   return apiJson(path, { method: "POST" });
 }
 
 async function apiBlob(path) {
   const headers = {};
-  const token = getMonitorToken();
-  if (token) {
-    headers["X-Monitor-Token"] = token;
-  }
 
   let response = await fetch(path, { headers });
   if (response.status === 401) {
@@ -2803,10 +2967,6 @@ async function apiJson(path, options = {}) {
   const optionHeaders = options.headers || {};
   if (options.body && !optionHeaders["Content-Type"]) {
     headers["Content-Type"] = "application/json";
-  }
-  const token = getMonitorToken();
-  if (token) {
-    headers["X-Monitor-Token"] = token;
   }
 
   let response = await fetch(path, { ...options, headers: { ...headers, ...optionHeaders } });
@@ -2838,9 +2998,7 @@ async function apiJson(path, options = {}) {
 
 function openBitacoraExcel(event) {
   event.preventDefault();
-  const token = getMonitorToken();
-  const query = token ? `?monitorToken=${encodeURIComponent(token)}` : "";
-  window.location.href = `/api/bitacora/excel${query}`;
+  window.location.href = "/api/bitacora/excel";
 }
 
 function getAdminFilterValues() {
@@ -3561,6 +3719,19 @@ document.getElementById("adminViewBtn").addEventListener("click", () => setMainV
 document.getElementById("axaRunBtn")?.addEventListener("click", runAxaNow);
 document.getElementById("axaSearchInput")?.addEventListener("input", applyAxaFilters);
 document.getElementById("axaStatusFilter")?.addEventListener("change", applyAxaFilters);
+document.getElementById("axaPrevPage")?.addEventListener("click", () => {
+  if (axaCurrentPage > 1) {
+    axaCurrentPage -= 1;
+    renderAxaTable();
+  }
+});
+document.getElementById("axaNextPage")?.addEventListener("click", () => {
+  const totalPages = Math.max(1, Math.ceil(axaFilteredRows.length / axaRowsPerPage));
+  if (axaCurrentPage < totalPages) {
+    axaCurrentPage += 1;
+    renderAxaTable();
+  }
+});
 document.querySelectorAll(".axa-filter-tab").forEach((button) => {
   button.addEventListener("click", () => {
     axaQuickFilter = button.dataset.axaFilter || "all";

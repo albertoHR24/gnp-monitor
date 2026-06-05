@@ -393,6 +393,7 @@
           <label for="bitEstado">Estado</label>
           <select id="bitEstado">
             <option value="PENDIENTE">PENDIENTE</option>
+            <option value="ACTIVADA">ACTIVADA</option>
             <option value="EN PROCESO">EN PROCESO</option>
             <option value="TERMINADA">TERMINADA</option>
             <option value="RECHAZADA">RECHAZADA</option>
@@ -444,7 +445,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          <input type="text" id="bitSearch" placeholder="Buscar..." />
+          <input type="search" id="bitSearch" name="gnp_bitacora_search" placeholder="Buscar..." autocomplete="off" autocapitalize="off" spellcheck="false" />
         </div>
         <select id="bitFilter" class="select-input">
           <option value="">Todos los estados</option>
@@ -765,7 +766,7 @@
           </svg>
           <div>
             <h2 id="axaSiniestrosTitle">Siniestros AXA</h2>
-            <p class="panel-description">Acceso a Consulta Express AXA para revisar siniestros fuera del flujo GNP.</p>
+            <p class="panel-description">Consulta de siniestros AXA para Autos, Da&ntilde;os y Salud.</p>
           </div>
         </div>
         <div class="panel-actions">
@@ -778,6 +779,14 @@
       </div>
 
       <form id="axaSiniestrosForm" class="form-grid siniestros-form">
+        <div class="form-field">
+          <label for="axaSinRamo">Ramo AXA</label>
+          <select id="axaSinRamo" class="select-input">
+            <option value="Autos">Autos</option>
+            <option value="Danos">Da&ntilde;os</option>
+            <option value="Salud">Salud</option>
+          </select>
+        </div>
         <div class="form-field span-2">
           <label for="axaSinFolios">Folios AXA</label>
           <textarea id="axaSinFolios" rows="4" placeholder="Ej. 17181465&#10;17181466&#10;17181467" required></textarea>
@@ -832,7 +841,7 @@
           </svg>
           <div>
             <h2 id="axaPanelTitle">Monitor AXA</h2>
-            <p class="panel-description">Vista preparada para recibir el flujo AXA y su origen de datos.</p>
+            <p class="panel-description">Consulta el historial de tramites directamente desde el portal AXA.</p>
           </div>
         </div>
         <div class="panel-actions">
@@ -850,10 +859,11 @@
         <div class="metric-card">
           <span class="metric-label">Hora</span>
           <span id="axaClock" class="metric-value">--:--</span>
+          <span id="axaRefreshCountdown" class="metric-subvalue">Refresca en --:--</span>
         </div>
         <div class="metric-card">
           <span class="metric-label">Ultima consulta AXA</span>
-          <span id="axaLastUpdate" class="metric-value">Pendiente</span>
+          <span id="axaLastUpdate" class="metric-value">Sin consulta</span>
         </div>
         <div class="metric-card">
           <span class="metric-label">Proxima consulta</span>
@@ -915,7 +925,7 @@
       <section class="table-panel axa-table-panel">
         <div class="table-header">
           <div class="table-title-group">
-            <h2>Ordenes de Trabajo AXA</h2>
+            <h2>Solicitudes AXA</h2>
             <span id="axaTableCount" class="count-badge">0 registros</span>
           </div>
           <div class="table-controls">
@@ -923,7 +933,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
-              <input id="axaSearchInput" type="text" placeholder="Buscar OT AXA, poliza, contratante..." />
+              <input id="axaSearchInput" name="axa_monitor_search" type="search" placeholder="Buscar folio, poliza, contratante..." autocomplete="off" autocapitalize="off" spellcheck="false" />
             </div>
             <select id="axaStatusFilter" class="select-input">
               <option value="">Todos los estados AXA</option>
@@ -936,33 +946,21 @@
             <path d="M12 2l8 4v6c0 5-3.4 8.7-8 10-4.6-1.3-8-5-8-10V6l8-4z"/><path d="M9 13l2 2 4-5"/>
           </svg>
           <h3>Sin registros AXA cargados</h3>
-          <p>Esta vista ya esta separada del monitor GNP y lista para conectar el flujo AXA.</p>
+          <p>Usa Actualizar AXA para iniciar sesion y leer el historial del portal.</p>
         </div>
 
-        <div class="table-wrapper">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th class="col-ot">OT AXA</th>
-                <th class="col-usuario">Usuario</th>
-                <th class="col-estatus">Estatus</th>
-                <th class="col-prioridad">Prioridad</th>
-                <th class="col-fecha">Compromiso</th>
-                <th class="col-poliza">Poliza</th>
-                <th class="col-agente">Agente</th>
-                <th class="col-contratante">Contratante</th>
-                <th class="col-tipo">Tipo</th>
-                <th class="col-producto">Producto</th>
-                <th class="col-guia">Guia</th>
-                <th class="col-fecha">Registro</th>
-                <th class="col-fecha">Primer ingreso</th>
-                <th class="col-fecha">Ultimo ingreso</th>
-                <th class="col-medio">Medio</th>
-                <th class="col-rol">Rol</th>
-              </tr>
-            </thead>
-            <tbody id="axaTbody"></tbody>
-          </table>
+        <div id="axaTbody" class="axa-request-list"></div>
+        <div id="axaPagination" class="pagination hidden">
+          <span id="axaPaginationInfo" class="pagination-info">Mostrando 1-10 de 10</span>
+          <div class="pagination-controls">
+            <button id="axaPrevPage" class="page-btn" type="button" disabled>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <span id="axaPageIndicator" class="page-indicator">1 / 1</span>
+            <button id="axaNextPage" class="page-btn" type="button">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
         </div>
       </section>
     </section>
@@ -981,7 +979,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
-              <input type="text" id="searchInput" placeholder="Buscar OT, poliza, contratante..." />
+              <input type="search" id="searchInput" name="gnp_monitor_search" placeholder="Buscar OT, poliza, contratante..." autocomplete="off" autocapitalize="off" spellcheck="false" />
             </div>
             <select id="statusFilter" class="select-input">
               <option value="">Todos los estados</option>

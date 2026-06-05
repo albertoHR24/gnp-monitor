@@ -809,6 +809,12 @@ body:not(.is-admin) .admin-panel {
   color: var(--color-text);
 }
 
+.metric-subvalue {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
 /* TV Controls */
 .tv-controls {
   display: none;
@@ -1867,16 +1873,119 @@ body.tv-mode .bitacora-panel {
   color: #93c5fd;
 }
 
-.axa-table-panel .table-wrapper {
+.axa-table-panel .table-wrapper,
+.axa-table-panel .axa-request-list {
   display: none;
 }
 
-.axa-table-panel.has-data .table-wrapper {
-  display: block;
+.axa-table-panel.has-data .axa-request-list {
+  display: flex;
 }
 
 .axa-empty-state {
   min-height: 260px;
+}
+
+.axa-request-list {
+  flex-direction: column;
+  gap: 0;
+  border-top: 4px solid #f97316;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.axa-request-item {
+  display: grid;
+  grid-template-columns: 150px minmax(280px, 1fr) minmax(220px, 360px);
+  gap: 22px;
+  align-items: center;
+  padding: 12px 20px;
+  border-top: 5px solid #05028a;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.24);
+}
+
+.axa-request-branch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  color: #67e8f9;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.axa-request-icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: #027f8f;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.axa-request-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.28;
+}
+
+.axa-request-line {
+  overflow-wrap: anywhere;
+}
+
+.axa-request-line strong {
+  color: #fff;
+  font-weight: 800;
+}
+
+.axa-request-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.axa-download-btn,
+.axa-bitacora-btn {
+  width: min(100%, 320px);
+  min-height: 44px;
+  border: 0;
+  border-radius: 0;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.axa-download-btn {
+  background: #ef705f;
+}
+
+.axa-bitacora-btn {
+  background: #2563eb;
+}
+
+.axa-download-btn:disabled,
+.axa-bitacora-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+@media (max-width: 900px) {
+  .axa-request-item {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+
+  .axa-request-actions {
+    grid-column: 1 / -1;
+  }
 }
 
 .panel-description {

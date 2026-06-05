@@ -12,6 +12,7 @@ const {
   isAllowedUserRole,
   isLocalHost,
   mergeCurrentMonthWithOpenOlderRows,
+  parseAxaListadoText,
   parseSiniestrosExcel,
   parseDateForSort,
   publicSessionInfo,
@@ -259,6 +260,59 @@ assert.strictEqual(
   "OT-260603-00002",
   "sanitizeBitacoraEntry should accept snake_case OT interna from form/API payloads"
 );
+
+const axaRows = parseAxaListadoText(`
+SALUD
+Nombre del contratante: GUILLERMO DE ALBA CRUZ
+Póliza: 91744108
+Trámite: ENDOSO
+Fecha Solicitud: 25/05/2026
+Estatus: TERMINADO
+Folio: 93841571
+Numero de Solicitudes: 1
+SALUD
+Nombre del contratante: GUILLERMO DE ALBA CRUZ
+Póliza: 91744108
+Trámite: ENDOSO
+Fecha Solicitud: 19/05/2026
+Estatus: RECHAZO EN LA DIVISION
+Folio: 93832620
+Comentario: RECHNPM Le informamos que su movimiento es improcedente.
+Numero de Solicitudes: 1
+`);
+assert.strictEqual(axaRows.length, 2, "parseAxaListadoText should extract AXA listing rows");
+assert.strictEqual(axaRows[0].ramo, "SALUD", "parseAxaListadoText should read branch from the first line");
+assert.strictEqual(axaRows[0].folio, "93841571", "parseAxaListadoText should read folio");
+assert.strictEqual(axaRows[0].poliza, "91744108", "parseAxaListadoText should read policy");
+assert.strictEqual(axaRows[0].numeroSolicitudes, "1", "parseAxaListadoText should read request count");
+assert.strictEqual(axaRows[1].estatus, "RECHAZO EN LA DIVISION", "parseAxaListadoText should read AXA status");
+assert.strictEqual(
+  axaRows[1].comentario,
+  "RECHNPM Le informamos que su movimiento es improcedente.",
+  "parseAxaListadoText should read comments"
+);
+const axaRowsWithChrome = parseAxaListadoText(`
+SALUD
+Estatus Nombre Solicitados Adicionales
+Nombre del contratante: -
+Póliza: Estatus Nombre Solicitados Adicionales
+Trámite: -
+Fecha Solicitud: -
+Estatus: Nombre Solicitados Adicionales
+Folio: Póliza
+Numero de Solicitudes: -
+SALUD
+Nombre del contratante: WILLIAM KISEL LAITER
+Póliza: S8028729
+Trámite: ENDOSO
+Fecha Solicitud: 14/04/2026
+Estatus: TERMINADO
+Folio: 93817266
+Numero de Solicitudes: 1 DESCARGAR SOLICITUD Registros por página: 10 1 - 10 of 50 SOLICITAR NUEVO TRÁMITE REGRESAR AXA México 2026
+`);
+assert.strictEqual(axaRowsWithChrome.length, 1, "parseAxaListadoText should ignore AXA header/footer chrome");
+assert.strictEqual(axaRowsWithChrome[0].folio, "93817266", "parseAxaListadoText should keep the valid last folio");
+assert.strictEqual(axaRowsWithChrome[0].numeroSolicitudes, "1", "parseAxaListadoText should trim footer from request count");
 
 const bitacoraWithoutRamo = sanitizeBitacoraEntry({
   folio: "26Y28G3374",
