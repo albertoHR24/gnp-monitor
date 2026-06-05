@@ -1150,8 +1150,8 @@ function sanitizeBitacoraEntry(input = {}, previous = {}) {
   const clean = {
     ...previous,
     id: normalizeText(previous.id || input.id) || makeBitacoraId(),
-    assignedUserId: normalizeText(input.assignedUserId || input.assigned_user_id || previous.assignedUserId),
-    createdByUserId: normalizeText(previous.createdByUserId || previous.created_by_user_id || input.createdByUserId || input.created_by_user_id),
+    assignedUserId: normalizeText(input.assignedUserId || input.assigned_user_id || previous.assignedUserId) || null,
+    createdByUserId: normalizeText(previous.createdByUserId || previous.created_by_user_id || input.createdByUserId || input.created_by_user_id) || null,
     createdByName: normalizeText(previous.createdByName || previous.created_by_name || input.createdByName || input.created_by_name),
     diasAtraso: normalizeText(input.diasAtraso),
     fechaEntradaCorreo: normalizeText(input.fechaEntradaCorreo || input.fecha_entrada_correo || previous.fechaEntradaCorreo),
@@ -8153,90 +8153,96 @@ app.post("/api/siniestros/import-excel", requireMonitorToken, requireRole("admin
 });
 
 app.post("/api/bitacora", requireMonitorToken, requireRole("admin", "executive"), (req, res) => {
-  const user = getRequestUser(req);
-  const entry = sanitizeBitacoraEntry(req.body || {});
-  applyLoggedUserCapture(entry, user);
-  if (user?.role !== "admin") {
-    entry.assignedUserId = user.id;
-    if (!entry.responsable) {
-      entry.responsable = user.display_name || user.username;
+  try {
+    const user = getRequestUser(req);
+    const entry = sanitizeBitacoraEntry(req.body || {});
+    applyLoggedUserCapture(entry, user);
+    if (user?.role !== "admin") {
+      entry.assignedUserId = user.id;
+      if (!entry.responsable) {
+        entry.responsable = user.display_name || user.username;
+      }
     }
-  }
-  const audit = buildAuditMetaFromRequest(req, "Captura inicial");
-  if (!entry.folio && !entry.poliza) {
-    res.status(400).json({
-      ok: false,
-      message: "Captura folio/OT o poliza para guardar la bitacora.",
-    });
-    return;
-  }
-  if (!entry.ramo) {
-    res.status(400).json({
-      ok: false,
-      message: "Selecciona el ramo correcto para guardar la bitacora.",
-    });
-    return;
-  }
+    const audit = buildAuditMetaFromRequest(req, "Captura inicial");
+    if (!entry.folio && !entry.poliza) {
+      res.status(400).json({
+        ok: false,
+        message: "Captura folio/OT o poliza para guardar la bitacora.",
+      });
+      return;
+    }
+    if (!entry.ramo) {
+      res.status(400).json({
+        ok: false,
+        message: "Selecciona el ramo correcto para guardar la bitacora.",
+      });
+      return;
+    }
 
-  const beforeCounts = countBitacoraRecordsForUser(user);
-  const existing = findExistingBitacoraEntry(entry);
-  let savedEntry = entry;
-  let action = "created";
+    const beforeCounts = countBitacoraRecordsForUser(user);
+    const existing = findExistingBitacoraEntry(entry);
+    let savedEntry = entry;
+    let action = "created";
 
-  if (existing) {
-    savedEntry = withMonitorSnapshot(sanitizeBitacoraEntry(entry, existing));
-    const followupReason = audit.reason && audit.reason !== "Captura inicial"
-      ? audit.reason
-      : "Nueva pauta agregada al historial";
-    appendBitacoraFollowup(existing, savedEntry, {
-      ...audit,
-      reason: followupReason,
-    });
-    action = "followup_existing";
-  } else {
-    insertBitacoraEntry(entry, "create", audit);
-  }
+    if (existing) {
+      savedEntry = withMonitorSnapshot(sanitizeBitacoraEntry(entry, existing));
+      const followupReason = audit.reason && audit.reason !== "Captura inicial"
+        ? audit.reason
+        : "Nueva pauta agregada al historial";
+      appendBitacoraFollowup(existing, savedEntry, {
+        ...audit,
+        reason: followupReason,
+      });
+      action = "followup_existing";
+    } else {
+      insertBitacoraEntry(entry, "create", audit);
+    }
 
-  const afterCounts = countBitacoraRecordsForUser(user);
-  const items = readBitacoraForRequest(req);
-  const comparison = buildBitacoraComparison(items, filterArchivedMonitorRows(runtime.data));
-  saveComparisonHistory(comparison);
-  writeBitacoraExcel(comparison);
-  writeAuditLog(req, action, "bitacora", existing?.id || entry.id, {
-    folio: savedEntry.folio,
-    poliza: savedEntry.poliza,
-    ramo: savedEntry.ramo,
-    otInterna: savedEntry.otInterna,
-    capturadoPor: savedEntry.createdByName,
-  });
-  pushLog("bitacora", action === "created" ? "Registro agregado a bitacora." : "Seguimiento agregado al historial de bitacora.", {
-    id: existing?.id || entry.id,
-    action,
-    folio: savedEntry.folio,
-    poliza: savedEntry.poliza,
-    ramo: savedEntry.ramo,
-    otInterna: savedEntry.otInterna,
-    capturadoPor: savedEntry.createdByName,
-    responsable: savedEntry.responsable,
-    beforeActive: beforeCounts.active,
-    afterActive: afterCounts.active,
-  });
-  res.status(action === "created" ? 201 : 200).json({
-    ...comparison,
-    db: afterCounts,
-    save: {
-      action,
-      duplicate: Boolean(existing),
-      id: existing?.id || entry.id,
+    const afterCounts = countBitacoraRecordsForUser(user);
+    const items = readBitacoraForRequest(req);
+    const comparison = buildBitacoraComparison(items, filterArchivedMonitorRows(runtime.data));
+    saveComparisonHistory(comparison);
+    writeBitacoraExcel(comparison);
+    writeAuditLog(req, action, "bitacora", existing?.id || entry.id, {
       folio: savedEntry.folio,
       poliza: savedEntry.poliza,
       ramo: savedEntry.ramo,
       otInterna: savedEntry.otInterna,
       capturadoPor: savedEntry.createdByName,
-      before: beforeCounts,
-      after: afterCounts,
-    },
-  });
+    });
+    pushLog("bitacora", action === "created" ? "Registro agregado a bitacora." : "Seguimiento agregado al historial de bitacora.", {
+      id: existing?.id || entry.id,
+      action,
+      folio: savedEntry.folio,
+      poliza: savedEntry.poliza,
+      ramo: savedEntry.ramo,
+      otInterna: savedEntry.otInterna,
+      capturadoPor: savedEntry.createdByName,
+      responsable: savedEntry.responsable,
+      beforeActive: beforeCounts.active,
+      afterActive: afterCounts.active,
+    });
+    res.status(action === "created" ? 201 : 200).json({
+      ...comparison,
+      db: afterCounts,
+      save: {
+        action,
+        duplicate: Boolean(existing),
+        id: existing?.id || entry.id,
+        folio: savedEntry.folio,
+        poliza: savedEntry.poliza,
+        ramo: savedEntry.ramo,
+        otInterna: savedEntry.otInterna,
+        capturadoPor: savedEntry.createdByName,
+        before: beforeCounts,
+        after: afterCounts,
+      },
+    });
+  } catch (error) {
+    const message = serializeError(error);
+    pushLog("bitacora", `Error al guardar bitacora: ${message}`, { error: true });
+    res.status(500).json({ ok: false, message });
+  }
 });
 
 app.put("/api/bitacora/:id", requireMonitorToken, requireRole("admin", "executive"), (req, res) => {
