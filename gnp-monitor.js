@@ -26,6 +26,22 @@ function parseListEnv(value) {
     .filter(Boolean);
 }
 
+function isRailwayRuntime() {
+  return Boolean(
+    process.env.RAILWAY_ENVIRONMENT ||
+    process.env.RAILWAY_SERVICE_ID ||
+    process.env.RAILWAY_PROJECT_ID
+  );
+}
+
+function getServerHost() {
+  const requested = String(process.env.HOST || "").trim();
+  if (isRailwayRuntime() && (!requested || isLocalHost(requested))) {
+    return "0.0.0.0";
+  }
+  return requested || "127.0.0.1";
+}
+
 function getBrowserChannel() {
   const requested = String(process.env.BROWSER_CHANNEL || "").trim();
   if (!requested) {
@@ -51,12 +67,12 @@ function getProfileDir() {
 
 const CONFIG = {
   port: Number(process.env.PORT || 3000),
-  host: process.env.HOST || "127.0.0.1",
+  host: getServerHost(),
   adminUsername: process.env.ADMIN_USERNAME || "admin",
   adminPassword: process.env.ADMIN_PASSWORD || "admin",
   sessionDays: Math.max(Number(process.env.SESSION_DAYS || 7), 1),
   allowedIps: parseListEnv(process.env.ALLOWED_IPS),
-  trustProxy: parseBooleanEnv(process.env.TRUST_PROXY, false),
+  trustProxy: parseBooleanEnv(process.env.TRUST_PROXY, isRailwayRuntime()),
   loginUrl: process.env.LOGIN_URL || "https://portalintermediarios.gnp.com.mx/sesion",
   dashboardUrl:
     process.env.DASHBOARD_URL ||
